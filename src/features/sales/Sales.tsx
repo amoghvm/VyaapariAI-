@@ -39,13 +39,48 @@ export function Sales() {
   const [paymentStatus, setPaymentStatus] = useState('paid')
   const [items, setItems] = useState([{ productId: 'p1', qty: 1, price: 85 }])
 
-  const sales = [
+  const [sales, setSales] = useState([
     { id: '1', invoice: 'INV-001', date: '2024-01-15', customer: 'Walk-in Customer', total: 1250.00, status: 'paid', paymentStatus: 'paid', items: [{ name: 'Basmati Rice 1kg', qty: 2, price: 85 }] },
     { id: '2', invoice: 'INV-002', date: '2024-01-15', customer: 'Ramesh Kumar', total: 3500.00, status: 'confirmed', paymentStatus: 'partial', items: [{ name: 'Toor Dal 1kg', qty: 10, price: 120 }] },
     { id: '3', invoice: 'INV-003', date: '2024-01-14', customer: 'Priya Sharma', total: 890.00, status: 'confirmed', paymentStatus: 'unpaid', items: [{ name: 'Sunflower Oil 1L', qty: 5, price: 145 }] },
-  ]
+  ])
+  const [submitting, setSubmitting] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   const total = items.reduce((s, it) => s + it.qty * it.price, 0)
+  const handleSaveSale = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (items.length === 0 || items.some((it) => it.qty <= 0)) return
+    setSubmitting(true)
+    const calculatedTotal = items.reduce((s, it) => s + it.qty * it.price, 0)
+    const newSale = {
+      id: crypto.randomUUID(),
+      invoice: `INV-${String(sales.length + 1).padStart(3, '0')}`,
+      invoice_number: `INV-00${sales.length + 1}`,
+      customer: customer,
+      customer_name: customer,
+      date: new Date().toISOString().slice(0, 10),
+      total: calculatedTotal,
+      total_amount: calculatedTotal,
+      paymentStatus: paymentStatus,
+      payment_status: paymentStatus.toLowerCase(),
+      paymentMethod: paymentMethod,
+      payment_method: paymentMethod,
+      items: items.map((item) => {
+        const p = products.find((x) => x.id === item.productId)
+        return { product_name: p?.name || '', quantity: Number(item.qty), unit_price: Number(item.price), subtotal: Number(item.qty) * Number(item.price), name: p?.name || '', qty: item.qty, price: item.price }
+      }),
+    }
+    setSales([newSale as any, ...sales])
+    setItems([{ productId: products[0].id, qty: 1, price: products[0].price }])
+    setCustomer('Walk-in Customer')
+    setPaymentMethod('Cash')
+    setPaymentStatus('paid')
+    setOpenNewSale(false)
+    setSubmitting(false)
+    setToast('Sale recorded successfully')
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const addItem = () => setItems([...items, { productId: products[0].id, qty: 1, price: products[0].price }])
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
@@ -61,6 +96,7 @@ export function Sales() {
 
   return (
     <div className="space-y-6">
+      {toast && <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded shadow z-50">{toast}</div>}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Sales</h1>
@@ -112,7 +148,8 @@ export function Sales() {
       </div>
 
       <Modal open={openNewSale} onClose={() => setOpenNewSale(false)} title="New Sale / POS Invoice" wide>
-        <div className="space-y-4">
+        <form onSubmit={handleSaveSale} className="space-y-4">
+          {toast && <div className="text-green-600 text-sm">{toast}</div>}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Customer</label>
@@ -156,9 +193,9 @@ export function Sales() {
           </div>
           <div className="flex justify-end gap-2">
             <button onClick={() => setOpenNewSale(false)} className="btn-secondary px-4">Cancel</button>
-            <button onClick={() => setOpenNewSale(false)} className="btn-primary">Save Sale</button>
+            <button type="submit" disabled={submitting} className="btn-primary">Save Sale</button>
           </div>
-        </div>
+        </form>
       </Modal>
 
       <Modal open={openView} onClose={() => setOpenView(false)} title="Invoice Preview">
