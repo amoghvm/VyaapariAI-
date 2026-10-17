@@ -1,6 +1,9 @@
 import { ShoppingCart, Plus, Search, Filter, Package, CreditCard, Users, FileText, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '@/features/auth/AuthContext'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 
 function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean }) {
   if (!open) return null
@@ -22,13 +25,8 @@ function Modal({ open, onClose, title, children, wide }: { open: boolean; onClos
   )
 }
 
-const products = [
-  { id: 'p1', name: 'Basmati Rice 1kg', price: 85 },
-  { id: 'p2', name: 'Toor Dal 1kg', price: 120 },
-  { id: 'p3', name: 'Sunflower Oil 1L', price: 145 },
-]
-
 export function Sales() {
+  const { business, store } = useAuth()
   const [search, setSearch] = useState('')
   const [openNewSale, setOpenNewSale] = useState(false)
   const [openView, setOpenView] = useState(false)
@@ -39,20 +37,91 @@ export function Sales() {
   const [paymentStatus, setPaymentStatus] = useState('paid')
   const [items, setItems] = useState([{ productId: 'p1', qty: 1, price: 85 }])
 
-  const [sales, setSales] = useState([
-    { id: '1', invoice: 'INV-001', date: '2024-01-15', customer: 'Walk-in Customer', total: 1250.00, status: 'paid', paymentStatus: 'paid', items: [{ name: 'Basmati Rice 1kg', qty: 2, price: 85 }] },
-    { id: '2', invoice: 'INV-002', date: '2024-01-15', customer: 'Ramesh Kumar', total: 3500.00, status: 'confirmed', paymentStatus: 'partial', items: [{ name: 'Toor Dal 1kg', qty: 10, price: 120 }] },
-    { id: '3', invoice: 'INV-003', date: '2024-01-14', customer: 'Priya Sharma', total: 890.00, status: 'confirmed', paymentStatus: 'unpaid', items: [{ name: 'Sunflower Oil 1L', qty: 5, price: 145 }] },
-  ])
+  const [products, setProducts] = useState(() =>
+    getStoredData(STORAGE_KEYS.PRODUCTS, [
+      { id: 'p1', name: 'Basmati Rice 1kg', price: 85 },
+      { id: 'p2', name: 'Toor Dal 1kg', price: 120 },
+      { id: 'p3', name: 'Sunflower Oil 1L', price: 145 },
+    ])
+  )
+
+  const [sales, setSales] = useState(() =>
+    getStoredData(STORAGE_KEYS.SALES, [
+      { id: '1', invoice: 'INV-001', date: '2024-01-15', customer: 'Walk-in Customer', total: 1250.00, status: 'paid', paymentStatus: 'paid', items: [{ name: 'Basmati Rice 1kg', qty: 2, price: 85 }] },
+      { id: '2', invoice: 'INV-002', date: '2024-01-15', customer: 'Ramesh Kumar', total: 3500.00, status: 'confirmed', paymentStatus: 'partial', items: [{ name: 'Toor Dal 1kg', qty: 10, price: 120 }] },
+      { id: '3', invoice: 'INV-003', date: '2024-01-14', customer: 'Priya Sharma', total: 890.00, status: 'confirmed', paymentStatus: 'unpaid', items: [{ name: 'Sunflower Oil 1L', qty: 5, price: 145 }] },
+    ])
+  )
   const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      if (!business?.id || !store?.id) return
+      try {
+        const { data: salesData, error: salesError } = await supabase
+          .from('sales')
+          .select('*')
+          .eq('business_id', business.id)
+          .eq('store_id', store.id)
+        if (!salesError && salesData && salesData.length > 0) {
+          const mapped = salesData.map((s: any) => ({
+            id: s.id,
+            invoice: `INV-${String(s.id).slice(-3)}`,
+            date: s.created_at?.slice(0, 10) || new Date().toISOString().slice(0, 10),
+            customer: s.customer_name,
+            total: s.total_amount,
+            status: s.payment_status === 'paid' ? 'paid' : 'confirmed',
+            paymentStatus: s.payment_status,
+            items: [],
+          }))
+          setSales(mapped)
+          saveStoredData(STORAGE_KEYS.SALES, mapped)
+        }
+      } catch (err) {
+        console.warn('Failed to load sales from Supabase:', err)
+      }
+    }
+    loadFromSupabase()
+  }, [business?.id, store?.id])
+
   const total = items.reduce((s, it) => s + it.qty * it.price, 0)
-  const handleSaveSale = (e: React.FormEvent) => {
+  const handleSaveSale = async (e: React.FormEvent) => {
     e.preventDefault()
     if (items.length === 0 || items.some((it) => it.qty <= 0)) return
     setSubmitting(true)
     const calculatedTotal = items.reduce((s, it) => s + it.qty * it.price, 0)
+
+    if (business?.id && store?.id) {
+      try {
+        const { data: saleData, error: saleError } = await supabase.from('sales').insert({
+          business_id: business.id,
+          store_id: store.id,
+          customer_name: customer,
+          total_amount: calculatedTotal,
+          payment_status: paymentStatus,
+          payment_method: paymentMethod,
+        }).select().single()
+
+        if (!saleError && saleData) {
+          await supabase.from('sale_items').insert(
+            items.map((item) => {
+              const p = products.find((x) => x.id === item.productId)
+              return {
+                sale_id: saleData.id,
+                product_name: p?.name || '',
+                quantity: Number(item.qty),
+                unit_price: Number(item.price),
+                subtotal: Number(item.qty) * Number(item.price)
+              }
+            })
+          )
+        }
+      } catch (err) {
+        console.warn('Supabase insert failed, falling back to localStorage:', err)
+      }
+    }
+
     const newSale = {
       id: crypto.randomUUID(),
       invoice: `INV-${String(sales.length + 1).padStart(3, '0')}`,
@@ -71,8 +140,10 @@ export function Sales() {
         return { product_name: p?.name || '', quantity: Number(item.qty), unit_price: Number(item.price), subtotal: Number(item.qty) * Number(item.price), name: p?.name || '', qty: item.qty, price: item.price }
       }),
     }
-    setSales([newSale as any, ...sales])
-    setItems([{ productId: products[0].id, qty: 1, price: products[0].price }])
+    const updated = [newSale as any, ...sales]
+    setSales(updated)
+    saveStoredData(STORAGE_KEYS.SALES, updated)
+    setItems([{ productId: products[0]?.id || 'p1', qty: 1, price: products[0]?.price || 85 }])
     setCustomer('Walk-in Customer')
     setPaymentMethod('Cash')
     setPaymentStatus('paid')
@@ -82,7 +153,7 @@ export function Sales() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const addItem = () => setItems([...items, { productId: products[0].id, qty: 1, price: products[0].price }])
+  const addItem = () => setItems([...items, { productId: products[0]?.id || 'p1', qty: 1, price: products[0]?.price || 85 }])
   const removeItem = (i: number) => setItems(items.filter((_, idx) => idx !== i))
   const updateItem = (i: number, field: string, val: any) => {
     const next = [...items]

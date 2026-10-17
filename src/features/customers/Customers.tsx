@@ -1,5 +1,7 @@
 import { Users, Plus, Search, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
@@ -24,12 +26,56 @@ export function Customers() {
   const [openLedger, setOpenLedger] = useState(false)
   const [selected, setSelected] = useState<any>(null)
   const [form, setForm] = useState({ name: '', phone: '', email: '', address: '', credit: '' })
-  const [customers, setCustomers] = useState([
-    { id: '1', name: 'Ramesh Kumar', phone: '9876543210', email: '', address: '', creditLimit: 5000, balance: 1200 },
-  ])
+  const [customers, setCustomers] = useState(() =>
+    getStoredData(STORAGE_KEYS.CUSTOMERS, [
+      { id: '1', name: 'Ramesh Kumar', phone: '9876543210', email: '', address: '', creditLimit: 5000, balance: 1200 },
+    ])
+  )
 
-  const save = () => {
-    setCustomers([...customers, { id: String(Date.now()), name: form.name, phone: form.phone, email: form.email, address: form.address, creditLimit: parseFloat(form.credit) || 0, balance: 0 }])
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase.from('customers').select('*')
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((c: any) => ({
+            id: c.id,
+            name: c.full_name,
+            phone: c.phone,
+            email: c.email,
+            address: c.address,
+            creditLimit: c.credit_limit,
+            balance: c.outstanding_balance,
+          }))
+          setCustomers(mapped)
+          saveStoredData(STORAGE_KEYS.CUSTOMERS, mapped)
+        }
+      } catch (err) {
+        console.warn('Failed to load customers from Supabase:', err)
+      }
+    }
+    loadFromSupabase()
+  }, [])
+
+  const save = async () => {
+    if (form.name) {
+      try {
+        await supabase.from('customers').insert({
+          full_name: form.name,
+          phone: form.phone,
+          email: form.email,
+          address: form.address,
+          credit_limit: Number(form.credit) || 0,
+          outstanding_balance: 0,
+          status: 'Active',
+        })
+      } catch (err) {
+        console.warn('Supabase insert failed, falling back to localStorage:', err)
+      }
+
+      const updated = [...customers, { id: String(Date.now()), name: form.name, phone: form.phone, email: form.email, address: form.address, creditLimit: parseFloat(form.credit) || 0, balance: 0 }]
+      setCustomers(updated)
+      saveStoredData(STORAGE_KEYS.CUSTOMERS, updated)
+    }
     setForm({ name: '', phone: '', email: '', address: '', credit: '' })
     setOpenAdd(false)
   }

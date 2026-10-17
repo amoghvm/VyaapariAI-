@@ -1,7 +1,8 @@
 import { LayoutDashboard, Building2, Store, Users, Package, CreditCard, TrendingUp, FileText, AlertTriangle, Bot, ShoppingCart, Settings, Plus, X } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthContext'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, saveStoredData } from '@/lib/storage'
 import { cn, formatCurrency } from '@/lib/utils'
-import { NavLink, useLocation } from 'react-router-dom'
 import { useState } from 'react'
 
 interface ProductFormData {
@@ -39,20 +40,6 @@ interface SaleItem {
   lineTotal: number
 }
 
-interface SaleFormData {
-  customer: string
-  paymentMethod: string
-  paymentStatus: string
-  items: SaleItem[]
-}
-
-const stats = [
-  { name: "Today's Sales", value: '₹0.00', icon: ShoppingCart, color: 'text-primary-600 bg-primary-100' },
-  { name: 'Outstanding Credit', value: '₹0.00', icon: Users, color: 'text-yellow-600 bg-yellow-100' },
-  { name: 'Low Stock Items', value: '0', icon: AlertTriangle, color: 'text-red-600 bg-red-100' },
-  { name: 'Pending Actions', value: '0', icon: FileText, color: 'text-blue-600 bg-blue-100' },
-]
-
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
   return (
@@ -78,7 +65,6 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 
 export function Dashboard() {
   const { business, store } = useAuth()
-  const location = useLocation()
   const [openSale, setOpenSale] = useState(false)
   const [openProduct, setOpenProduct] = useState(false)
   const [openCustomer, setOpenCustomer] = useState(false)
@@ -102,9 +88,40 @@ export function Dashboard() {
   })
   const [expenses, setExpenses] = useState<Array<{ id: string; date: string; category: string; description: string; amount: number; method: string; reference: string; business_id?: string; store_id?: string }>>([])
 
-  const handleProductSubmit = (e: React.FormEvent) => {
+  // Sale form state
+  const [saleForm, setSaleForm] = useState({
+    customerName: 'Walk-in Customer',
+    paymentMethod: 'Cash',
+    paymentStatus: 'paid',
+    items: [{ productName: '', sku: '', quantity: 1, price: 0, lineTotal: 0 }],
+  })
+  const [sales, setSales] = useState<Array<{ id: string; customer_name: string; total_amount: number; payment_status: string; payment_method: string; business_id?: string; store_id?: string }>>([])
+
+  // KPI state
+  const [todaySales, setTodaySales] = useState(0)
+  const [stats, setStats] = useState([
+    { name: "Today's Sales", value: '₹0.00', icon: ShoppingCart, color: 'text-primary-600 bg-primary-100' },
+    { name: 'Outstanding Credit', value: '₹0.00', icon: Users, color: 'text-yellow-600 bg-yellow-100' },
+    { name: 'Low Stock Items', value: '0', icon: AlertTriangle, color: 'text-red-600 bg-red-100' },
+    { name: 'Pending Actions', value: '0', icon: FileText, color: 'text-blue-600 bg-blue-100' },
+  ])
+
+  const updateTodaySales = (amount: number) => {
+    setTodaySales(prev => prev + amount)
+    setStats(prev => prev.map(s => s.name === "Today's Sales" ? { ...s, value: `₹${(prev + amount).toFixed(2)}` } : s))
+  }
+
+  const [toast, setToast] = useState<string | null>(null)
+  const showToast = (msg: string) => {
+    setToast(msg)
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!productForm.name || !productForm.sku) return
+    if (!business?.id || !store?.id) return
+
     const newProduct = {
       id: String(Date.now()),
       name: productForm.name,
@@ -116,17 +133,43 @@ export function Dashboard() {
       stock: parseInt(productForm.stock, 10) || 0,
       reorderLevel: parseInt(productForm.reorderLevel, 10) || 0,
       status: 'active',
-      business_id: business?.id,
-      store_id: store?.id,
+      business_id: business.id,
+      store_id: store.id,
     }
-    setProducts([...products, newProduct])
+
+    try {
+      const { error } = await supabase.from('products').insert({
+        business_id: business.id,
+        store_id: store.id,
+        name: productForm.name,
+        sku: productForm.sku,
+        category: productForm.category,
+        unit: productForm.unit,
+        sale_price: Number(productForm.salePrice),
+        purchase_price: Number(productForm.purchasePrice),
+        stock: Number(productForm.stock),
+        reorder_level: Number(productForm.reorderLevel),
+        status: 'active'
+      })
+
+      if (error) throw error
+    } catch (err) {
+      console.warn('Supabase insert failed, falling back to localStorage:', err)
+    }
+
+    const updated = [...products, newProduct]
+    setProducts(updated)
+    saveStoredData(STORAGE_KEYS.PRODUCTS, updated)
     setProductForm({ name: '', sku: '', category: 'Grains', unit: 'kg', salePrice: '', purchasePrice: '', stock: '', reorderLevel: '' })
     setOpenProduct(false)
+    showToast('Product added to catalogue')
   }
 
-  const handleCustomerSubmit = (e: React.FormEvent) => {
+  const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!customerForm.name) return
+    if (!business?.id) return
+
     const newCustomer = {
       id: String(Date.now()),
       name: customerForm.name,
@@ -136,16 +179,38 @@ export function Dashboard() {
       creditLimit: parseFloat(customerForm.creditLimit) || 0,
       outstanding: 0,
       status: 'active',
-      business_id: business?.id,
+      business_id: business.id,
     }
-    setCustomers([...customers, newCustomer])
+
+    try {
+      const { error } = await supabase.from('customers').insert({
+        business_id: business.id,
+        full_name: customerForm.name,
+        phone: customerForm.phone,
+        email: customerForm.email,
+        address: customerForm.address,
+        credit_limit: Number(customerForm.creditLimit || 0),
+        outstanding_balance: 0,
+        status: 'Active'
+      })
+      if (error) throw error
+    } catch (err) {
+      console.warn('Supabase insert failed, falling back to localStorage:', err)
+    }
+
+    const updated = [...customers, newCustomer]
+    setCustomers(updated)
+    saveStoredData(STORAGE_KEYS.CUSTOMERS, updated)
     setCustomerForm({ name: '', phone: '', email: '', address: '', creditLimit: '0' })
     setOpenCustomer(false)
+    showToast('Customer added successfully')
   }
 
-  const handleExpenseSubmit = (e: React.FormEvent) => {
+  const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!expenseForm.description || !expenseForm.amount) return
+    if (!business?.id || !store?.id) return
+
     const newExpense = {
       id: String(Date.now()),
       date: new Date().toISOString().slice(0, 10),
@@ -154,12 +219,114 @@ export function Dashboard() {
       amount: parseFloat(expenseForm.amount) || 0,
       method: expenseForm.method,
       reference: expenseForm.reference,
-      business_id: business?.id,
-      store_id: store?.id,
+      business_id: business.id,
+      store_id: store.id,
     }
-    setExpenses([...expenses, newExpense])
+
+    try {
+      const { error } = await supabase.from('expenses').insert({
+        business_id: business.id,
+        store_id: store.id,
+        category: expenseForm.category,
+        description: expenseForm.description,
+        amount: Number(expenseForm.amount),
+        payment_method: expenseForm.method,
+        reference: expenseForm.reference || null,
+        date: new Date().toISOString().slice(0, 10)
+      })
+      if (error) throw error
+    } catch (err) {
+      console.warn('Supabase insert failed, falling back to localStorage:', err)
+    }
+
+    const updated = [...expenses, newExpense]
+    setExpenses(updated)
+    saveStoredData(STORAGE_KEYS.EXPENSES, updated)
     setExpenseForm({ category: 'Rent', description: '', amount: '', method: 'cash', reference: '' })
     setOpenExpense(false)
+    showToast('Expense recorded successfully')
+  }
+
+  const handleSaleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!business?.id || !store?.id) return
+    const lineItems = saleForm.items.filter(it => it.productName && it.quantity > 0)
+    if (lineItems.length === 0) return
+
+    const calculatedTotal = lineItems.reduce((s, it) => s + Number(it.quantity) * Number(it.price), 0)
+
+    try {
+      const { data: saleData, error: saleError } = await supabase.from('sales').insert({
+        business_id: business.id,
+        store_id: store.id,
+        customer_name: saleForm.customerName || 'Walk-in Customer',
+        total_amount: calculatedTotal,
+        payment_status: saleForm.paymentStatus,
+        payment_method: saleForm.paymentMethod
+      }).select().single()
+
+      if (!saleError && saleData) {
+        await supabase.from('sale_items').insert(
+          lineItems.map(item => ({
+            sale_id: saleData.id,
+            product_name: item.productName,
+            quantity: Number(item.quantity),
+            unit_price: Number(item.price),
+            subtotal: Number(item.quantity) * Number(item.price)
+          }))
+        )
+      }
+    } catch (err) {
+      console.warn('Supabase insert failed, falling back to localStorage:', err)
+    }
+
+    const newSale = {
+      id: String(Date.now()),
+      customer_name: saleForm.customerName || 'Walk-in Customer',
+      total_amount: calculatedTotal,
+      payment_status: saleForm.paymentStatus,
+      payment_method: saleForm.paymentMethod,
+      business_id: business.id,
+      store_id: store.id,
+    }
+    const updated = [newSale, ...sales]
+    setSales(updated)
+    saveStoredData(STORAGE_KEYS.SALES, updated)
+    updateTodaySales(calculatedTotal)
+
+    setSaleForm({
+      customerName: 'Walk-in Customer',
+      paymentMethod: 'Cash',
+      paymentStatus: 'paid',
+      items: [{ productName: '', sku: '', quantity: 1, price: 0, lineTotal: 0 }],
+    })
+    setOpenSale(false)
+    showToast('Sale recorded successfully')
+  }
+
+  const addSaleItem = () => {
+    setSaleForm(prev => ({
+      ...prev,
+      items: [...prev.items, { productName: '', sku: '', quantity: 1, price: 0, lineTotal: 0 }],
+    }))
+  }
+
+  const updateSaleItem = (i: number, field: string, val: any) => {
+    const next = [...saleForm.items]
+    next[i] = { ...next[i], [field]: val }
+    if (field === 'productName') {
+      const p = products.find((x) => x.name === val)
+      if (p) {
+        next[i].price = p.salePrice
+        next[i].sku = p.sku
+      }
+    }
+    next[i].lineTotal = Number(next[i].quantity) * Number(next[i].price)
+    setSaleForm(prev => ({ ...prev, items: next }))
+  }
+
+  const removeSaleItem = (i: number) => {
+    setSaleForm(prev => ({ ...prev, items: prev.items.filter((_, idx) => idx !== i) }))
   }
 
   return (
@@ -278,24 +445,80 @@ export function Dashboard() {
 
       {/* New Sale Modal */}
       <Modal open={openSale} onClose={() => setOpenSale(false)} title="New Sale">
-        <form className="space-y-4">
+        <form onSubmit={handleSaleSubmit} className="space-y-4">
+          {toast && <div className="text-green-600 text-sm">{toast}</div>}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Customer</label>
-              <input className="input" placeholder="Walk-in Customer" defaultValue="Walk-in Customer" />
+              <input
+                className="input"
+                placeholder="Walk-in Customer"
+                value={saleForm.customerName}
+                onChange={(e) => setSaleForm({ ...saleForm, customerName: e.target.value })}
+              />
             </div>
             <div>
               <label className="label">Payment Method</label>
-              <select className="input">
+              <select
+                className="input"
+                value={saleForm.paymentMethod}
+                onChange={(e) => setSaleForm({ ...saleForm, paymentMethod: e.target.value })}
+              >
                 <option>Cash</option>
                 <option>Card</option>
                 <option>UPI</option>
                 <option>Bank Transfer</option>
               </select>
             </div>
+            <div>
+              <label className="label">Payment Status</label>
+              <select
+                className="input"
+                value={saleForm.paymentStatus}
+                onChange={(e) => setSaleForm({ ...saleForm, paymentStatus: e.target.value })}
+              >
+                <option value="paid">Paid</option>
+                <option value="partial">Partial</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Add line items from the Sales module
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="label">Line Items</label>
+              <button type="button" onClick={addSaleItem} className="btn-secondary text-sm">+ Add Item</button>
+            </div>
+            {saleForm.items.map((it, i) => (
+              <div key={i} className="grid grid-cols-4 gap-2">
+                <select
+                  className="input"
+                  value={it.productName}
+                  onChange={(e) => updateSaleItem(i, 'productName', e.target.value)}
+                >
+                  <option value="">Select product...</option>
+                  {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+                </select>
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Qty"
+                  value={it.quantity}
+                  onChange={(e) => updateSaleItem(i, 'quantity', parseInt(e.target.value) || 0)}
+                />
+                <input
+                  type="number"
+                  className="input"
+                  placeholder="Price"
+                  value={it.price}
+                  onChange={(e) => updateSaleItem(i, 'price', parseFloat(e.target.value) || 0)}
+                />
+                <button type="button" onClick={() => removeSaleItem(i)} className="btn-secondary text-sm">Remove</button>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-between pt-4 border-t border-gray-100 font-medium">
+            <span>Total</span>
+            <span>₹{saleForm.items.reduce((s, it) => s + Number(it.quantity) * Number(it.price), 0).toFixed(2)}</span>
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setOpenSale(false)} className="btn-secondary px-4">Cancel</button>

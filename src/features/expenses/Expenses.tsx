@@ -1,5 +1,7 @@
 import { Receipt, Plus, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
@@ -22,10 +24,52 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 export function Expenses() {
   const [open, setOpen] = useState(false)
   const [form, setForm] = useState({ category: '', description: '', amount: '', method: 'Cash', reference: '' })
-  const [rows, setRows] = useState([{ id: '1', category: 'Rent', description: 'Shop rent', amount: 5000, method: 'Bank', reference: 'R-001' }])
+  const [rows, setRows] = useState(() =>
+    getStoredData(STORAGE_KEYS.EXPENSES, [{ id: '1', category: 'Rent', description: 'Shop rent', amount: 5000, method: 'Bank', reference: 'R-001' }])
+  )
 
-  const save = () => {
-    setRows([...rows, { id: String(Date.now()), category: form.category, description: form.description, amount: parseFloat(form.amount) || 0, method: form.method, reference: form.reference }])
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase.from('expenses').select('*')
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((e: any) => ({
+            id: e.id,
+            category: e.category,
+            description: e.description,
+            amount: e.amount,
+            method: e.payment_method,
+            reference: e.reference,
+          }))
+          setRows(mapped)
+          saveStoredData(STORAGE_KEYS.EXPENSES, mapped)
+        }
+      } catch (err) {
+        console.warn('Failed to load expenses from Supabase:', err)
+      }
+    }
+    loadFromSupabase()
+  }, [])
+
+  const save = async () => {
+    if (form.description && form.amount) {
+      try {
+        await supabase.from('expenses').insert({
+          category: form.category,
+          description: form.description,
+          amount: Number(form.amount),
+          payment_method: form.method,
+          reference: form.reference || null,
+          date: new Date().toISOString().slice(0, 10),
+        })
+      } catch (err) {
+        console.warn('Supabase insert failed, falling back to localStorage:', err)
+      }
+
+      const updated = [...rows, { id: String(Date.now()), category: form.category, description: form.description, amount: parseFloat(form.amount) || 0, method: form.method, reference: form.reference }]
+      setRows(updated)
+      saveStoredData(STORAGE_KEYS.EXPENSES, updated)
+    }
     setForm({ category: '', description: '', amount: '', method: 'Cash', reference: '' })
     setOpen(false)
   }

@@ -14,6 +14,10 @@ interface AuthContextType extends UserContext {
   refreshSession: () => Promise<void>
   createBusiness: (data: CreateBusinessData) => Promise<{ business: Business | null; error: Error | null }>
   createStore: (data: CreateStoreData) => Promise<{ store: Store | null; error: Error | null }>
+  completeProfile: (data: { full_name: string; preferred_language: string }) => Promise<{ error: Error | null }>
+  updateProfile: (data: { full_name?: string | null; phone?: string | null; preferred_language?: string | null }) => Promise<{ error: Error | null }>
+  updateBusiness: (data: Partial<Omit<Business, 'id' | 'created_at' | 'updated_at' | 'settings'>>) => Promise<{ error: Error | null }>
+  updateStore: (data: Partial<Omit<Store, 'id' | 'business_id' | 'created_at' | 'updated_at' | 'settings'>>) => Promise<{ error: Error | null }>
 }
 
 interface CreateBusinessData {
@@ -330,6 +334,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null }
   }
 
+  const updateProfile = async (data: { full_name?: string | null; phone?: string | null; preferred_language?: string | null }) => {
+    if (!user) return { error: new Error('Not authenticated') }
+
+    const payload: Record<string, unknown> = { ...data, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('profiles').update(payload).eq('id', user.id)
+
+    if (error) return { error: new Error(error.message) }
+
+    setUser((prev) => (prev ? { ...prev, ...data, updated_at: payload.updated_at as string } : prev))
+    return { error: null }
+  }
+
+  const updateBusiness = async (data: Partial<Omit<Business, 'id' | 'created_at' | 'updated_at' | 'settings'>>) => {
+    if (!business) return { error: new Error('No active business') }
+
+    const payload = { ...data, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('businesses').update(payload).eq('id', business.id)
+
+    if (error) return { error: new Error(error.message) }
+
+    setBusiness((prev) => (prev ? { ...prev, ...payload } : prev))
+    return { error: null }
+  }
+
+  const updateStore = async (data: Partial<Omit<Store, 'id' | 'business_id' | 'created_at' | 'updated_at' | 'settings'>>) => {
+    if (!store) return { error: new Error('No active store') }
+
+    const payload = { ...data, updated_at: new Date().toISOString() }
+    const { error } = await supabase.from('stores').update(payload).eq('id', store.id)
+
+    if (error) return { error: new Error(error.message) }
+
+    setStore((prev) => (prev ? { ...prev, ...payload } : prev))
+    return { error: null }
+  }
+
   const profileIncomplete = !user?.full_name
 
   return (
@@ -353,6 +393,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         switchBusiness,
         switchStore,
         completeProfile,
+        updateProfile,
+        updateBusiness,
+        updateStore,
         createBusiness,
         createStore,
       }}

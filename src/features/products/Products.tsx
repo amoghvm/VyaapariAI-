@@ -1,7 +1,9 @@
 import { Package, Plus, Search, Filter, Tag, AlertTriangle, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
@@ -44,14 +46,50 @@ export function Products() {
     reorderLevel: '',
   })
 
-  const [products, setProducts] = useState([
-    { id: '1', name: 'Basmati Rice 1kg', sku: 'RICE-001', category: 'Grains', unit: 'kg', salePrice: 85, purchasePrice: 70, stock: 50, reorderLevel: 10, status: 'active' },
-    { id: '2', name: 'Toor Dal 1kg', sku: 'DAL-001', category: 'Pulses', unit: 'kg', salePrice: 120, purchasePrice: 100, stock: 30, reorderLevel: 5, status: 'active' },
-    { id: '3', name: 'Sunflower Oil 1L', sku: 'OIL-001', category: 'Oils', unit: 'litre', salePrice: 145, purchasePrice: 130, stock: 20, reorderLevel: 5, status: 'low' },
-    { id: '4', name: 'Biscuits Packet', sku: 'BISC-001', category: 'Snacks', unit: 'packet', salePrice: 25, purchasePrice: 20, stock: 100, reorderLevel: 20, status: 'active' },
-  ])
+  const [products, setProducts] = useState(() =>
+    getStoredData(STORAGE_KEYS.PRODUCTS, [
+      { id: '1', name: 'Basmati Rice 1kg', sku: 'RICE-001', category: 'Grains', unit: 'kg', salePrice: 85, purchasePrice: 70, stock: 50, reorderLevel: 10, status: 'active' },
+      { id: '2', name: 'Toor Dal 1kg', sku: 'DAL-001', category: 'Pulses', unit: 'kg', salePrice: 120, purchasePrice: 100, stock: 30, reorderLevel: 5, status: 'active' },
+      { id: '3', name: 'Sunflower Oil 1L', sku: 'OIL-001', category: 'Oils', unit: 'litre', salePrice: 145, purchasePrice: 130, stock: 20, reorderLevel: 5, status: 'low' },
+      { id: '4', name: 'Biscuits Packet', sku: 'BISC-001', category: 'Snacks', unit: 'packet', salePrice: 25, purchasePrice: 20, stock: 100, reorderLevel: 20, status: 'active' },
+    ])
+  )
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      if (!business?.id || !store?.id) return
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .select('*')
+          .eq('business_id', business.id)
+          .eq('store_id', store.id)
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            category: p.category,
+            unit: p.unit,
+            salePrice: p.sale_price,
+            purchasePrice: p.purchase_price,
+            stock: p.stock,
+            reorderLevel: p.reorder_level,
+            status: p.status,
+            business_id: p.business_id,
+            store_id: p.store_id,
+          }))
+          setProducts(mapped)
+          saveStoredData(STORAGE_KEYS.PRODUCTS, mapped)
+        }
+      } catch (err) {
+        console.warn('Failed to load products from Supabase:', err)
+      }
+    }
+    loadFromSupabase()
+  }, [business?.id, store?.id])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const newProduct = {
@@ -69,7 +107,29 @@ export function Products() {
       store_id: store?.id,
     }
 
-    setProducts([...products, newProduct])
+    if (business?.id && store?.id) {
+      try {
+        await supabase.from('products').insert({
+          business_id: business.id,
+          store_id: store.id,
+          name: formData.name,
+          sku: formData.sku,
+          category: formData.category,
+          unit: formData.unit,
+          sale_price: parseFloat(formData.salePrice) || 0,
+          purchase_price: parseFloat(formData.purchasePrice) || 0,
+          stock: parseInt(formData.stock, 10) || 0,
+          reorder_level: parseInt(formData.reorderLevel, 10) || 0,
+          status: 'active',
+        })
+      } catch (err) {
+        console.warn('Supabase insert failed, falling back to localStorage:', err)
+      }
+    }
+
+    const updated = [...products, newProduct]
+    setProducts(updated)
+    saveStoredData(STORAGE_KEYS.PRODUCTS, updated)
     setFormData({
       name: '',
       sku: '',

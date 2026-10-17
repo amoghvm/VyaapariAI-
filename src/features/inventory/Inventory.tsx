@@ -1,5 +1,7 @@
 import { Package, Plus, Search, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '@/lib/supabase'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
@@ -24,18 +26,46 @@ export function Inventory() {
   const [openAdjust, setOpenAdjust] = useState(false)
   const [selected, setSelected] = useState<any>(null)
   const [form, setForm] = useState({ name: '', sku: '', stock: '', reorder: '', notes: '' })
-  const [items, setItems] = useState([
-    { id: '1', name: 'Basmati Rice 1kg', sku: 'RICE-001', stock: 50, reorderLevel: 10 },
-    { id: '2', name: 'Toor Dal 1kg', sku: 'DAL-001', stock: 30, reorderLevel: 5 },
-  ])
+  const [items, setItems] = useState(() =>
+    getStoredData(STORAGE_KEYS.PRODUCTS, [
+      { id: '1', name: 'Basmati Rice 1kg', sku: 'RICE-001', stock: 50, reorderLevel: 10 },
+      { id: '2', name: 'Toor Dal 1kg', sku: 'DAL-001', stock: 30, reorderLevel: 5 },
+    ])
+  )
+
+  useEffect(() => {
+    const loadFromSupabase = async () => {
+      try {
+        const { data, error } = await supabase.from('products').select('*')
+        if (!error && data && data.length > 0) {
+          const mapped = data.map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            sku: p.sku,
+            stock: p.stock,
+            reorderLevel: p.reorder_level,
+          }))
+          setItems(mapped)
+          saveStoredData(STORAGE_KEYS.PRODUCTS, mapped)
+        }
+      } catch (err) {
+        console.warn('Failed to load inventory from Supabase:', err)
+      }
+    }
+    loadFromSupabase()
+  }, [])
 
   const saveProduct = () => {
-    setItems([...items, { id: String(Date.now()), name: form.name, sku: form.sku, stock: parseInt(form.stock) || 0, reorderLevel: parseInt(form.reorder) || 0 }])
+    const updated = [...items, { id: String(Date.now()), name: form.name, sku: form.sku, stock: parseInt(form.stock) || 0, reorderLevel: parseInt(form.reorder) || 0 }]
+    setItems(updated)
+    saveStoredData(STORAGE_KEYS.PRODUCTS, updated)
     setForm({ name: '', sku: '', stock: '', reorder: '', notes: '' })
     setOpenAdd(false)
   }
   const saveAdjust = () => {
-    setItems(items.map((it) => it.id === selected?.id ? { ...it, stock: parseInt(form.stock) || it.stock, reorderLevel: parseInt(form.reorder) || it.reorderLevel } : it))
+    const updated = items.map((it) => it.id === selected?.id ? { ...it, stock: parseInt(form.stock) || it.stock, reorderLevel: parseInt(form.reorder) || it.reorderLevel } : it)
+    setItems(updated)
+    saveStoredData(STORAGE_KEYS.PRODUCTS, updated)
     setOpenAdjust(false)
   }
 
