@@ -1,4 +1,4 @@
-# VyaapariAI-
+
 # VyapariAI — Kirana Product Catalogue & Inventory Management
 
 ## Overview
