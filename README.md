@@ -3,7 +3,6 @@
 **Team:** Wasted_Potential  
 **Hackathon:** HackSprint Bangalore 2026  
 **Track:** PS21 — FinTech & Commerce  
-**Presenter:** Amogh V M
 
 ## 1. Overview
 
