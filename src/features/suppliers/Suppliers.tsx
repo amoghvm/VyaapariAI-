@@ -1,10 +1,36 @@
-import { Package, Plus, Search, Filter, Truck, CreditCard, AlertTriangle, Phone, Mail } from 'lucide-react'
+import { Package, Plus, Search, Filter, Truck, CreditCard, AlertTriangle, Phone, Mail, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+
+function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  if (!open) return null
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="bg-white rounded-xl shadow-2xl w-full max-w-md border border-gray-200 animate-in fade-in zoom-in">
+          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <button onClick={onClose} className="p-2 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="p-6">{children}</div>
+          <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
+            <button onClick={onClose} className="btn-secondary px-4">Close</button>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
 
 export function Suppliers() {
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [openAdd, setOpenAdd] = useState(false)
+  const [openPurchase, setOpenPurchase] = useState(false)
+  const [selectedSupplier, setSelectedSupplier] = useState<any>(null)
 
   const suppliers = [
     { id: '1', name: 'Metro Wholesale', contact: 'Rajesh Kumar', phone: '9876543210', email: 'rajesh@metro.com', address: 'Industrial Area', gst: '29ABCDE1234F1Z5', paymentTerms: 30, outstanding: 25000, status: 'active' },
@@ -19,10 +45,13 @@ export function Suppliers() {
           <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
           <p className="text-gray-600 mt-1">Manage supplier relationships and purchases</p>
         </div>
-        <NavLink to="/suppliers/new" className="btn-primary">
+        <button
+          onClick={() => setOpenAdd(true)}
+          className="btn-primary"
+        >
           <Plus className="h-4 w-4" />
           Add Supplier
-        </NavLink>
+        </button>
       </div>
 
       <div className="card">
@@ -91,8 +120,12 @@ export function Suppliers() {
                   </td>
                   <td className="p-4">
                     <div className="flex gap-2">
-                      <NavLink to={`/suppliers/${supplier.id}`} className="text-primary-600 hover:text-primary-500 text-sm font-medium">View</NavLink>
-                      <NavLink to={`/suppliers/${supplier.id}/purchase`} className="text-green-600 hover:text-green-500 text-sm font-medium">New Purchase</NavLink>
+                      <button
+                        onClick={() => { setSelectedSupplier(supplier); setOpenPurchase(true) }}
+                        className="text-green-600 hover:text-green-500 text-sm font-medium"
+                      >
+                        New Purchase
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -101,6 +134,73 @@ export function Suppliers() {
           </table>
         </div>
       </div>
+
+      <Modal open={openAdd} onClose={() => setOpenAdd(false)} title="Add Supplier">
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Supplier Name</label>
+              <input className="input" placeholder="Supplier name" />
+            </div>
+            <div>
+              <label className="label">Contact Person</label>
+              <input className="input" placeholder="Contact person" />
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input type="tel" className="input" placeholder="+91 98765 43210" />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input type="email" className="input" placeholder="supplier@example.com" />
+            </div>
+            <div>
+              <label className="label">GST Number</label>
+              <input className="input" placeholder="29ABCDE1234F1Z5" />
+            </div>
+            <div>
+              <label className="label">Payment Terms (days)</label>
+              <input type="number" className="input" placeholder="30" />
+            </div>
+          </div>
+          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
+            Supplier creation form — connect to Suppliers module
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={openPurchase} onClose={() => setOpenPurchase(false)} title="New Purchase">
+        {selectedSupplier && (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">Log a new purchase from {selectedSupplier.name}.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="label">Invoice Number</label>
+                <input className="input" placeholder="INV-001" />
+              </div>
+              <div>
+                <label className="label">Invoice Date</label>
+                <input type="date" className="input" />
+              </div>
+              <div>
+                <label className="label">Total Amount</label>
+                <input type="number" className="input" placeholder="₹0.00" />
+              </div>
+              <div>
+                <label className="label">Payment Status</label>
+                <select className="input">
+                  <option>Pending</option>
+                  <option>Paid</option>
+                  <option>Partial</option>
+                </select>
+              </div>
+            </div>
+            <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
+              Purchase line items — connect to Suppliers module
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

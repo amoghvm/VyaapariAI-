@@ -1,19 +1,145 @@
-import { CreditCard, Plus, Search, Filter, Receipt, DollarSign, TrendingUp } from 'lucide-react'
+import { CreditCard, Plus, Search, Filter, Receipt, DollarSign, TrendingUp, Download, Printer } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '@/features/auth/AuthContext'
+import { cn, formatCurrency } from '@/lib/utils'
+
+interface Expense {
+  id: string
+  date: string
+  category: string
+  description: string
+  amount: number
+  method: string
+  reference: string
+}
 
 export function Expenses() {
+  const { store } = useAuth()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState('all')
+  const [printing, setPrinting] = useState(false)
 
-  const expenses = [
+  const expenses: Expense[] = [
     { id: '1', date: '2024-01-15', category: 'Rent', description: 'Shop rent', amount: 15000, method: 'bank_transfer', reference: 'RENT-001' },
     { id: '2', date: '2024-01-14', category: 'Utilities', description: 'Electricity bill', amount: 3500, method: 'upi', reference: 'ELEC-001' },
     { id: '3', date: '2024-01-13', category: 'Transport', description: 'Delivery van fuel', amount: 2500, method: 'cash', reference: '' },
     { id: '4', date: '2024-01-12', category: 'Marketing', description: 'Local newspaper ad', amount: 5000, method: 'card', reference: 'AD-001' },
   ]
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0)
+  const filteredExpenses = expenses.filter((e) => {
+    const matchesSearch =
+      e.description.toLowerCase().includes(search.toLowerCase()) ||
+      e.reference.toLowerCase().includes(search.toLowerCase()) ||
+      e.category.toLowerCase().includes(search.toLowerCase())
+    const matchesFilter = filter === 'all' || e.category.toLowerCase() === filter
+    return matchesSearch && matchesFilter
+  })
+
+  const totalExpenses = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
+
+  const exportCSV = () => {
+    const headers = ['Date', 'Category', 'Description', 'Amount', 'Payment Method', 'Reference']
+    const rows = filteredExpenses.map((e) => [
+      e.date,
+      e.category,
+      e.description,
+      e.amount.toString(),
+      e.method.replace('_', ' '),
+      e.reference || '',
+    ])
+    const csvContent = [headers, ...rows]
+      .map((row) => row.map((field) => `"${String(field).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const storeName = store?.name?.replace(/\s+/g, '_') || 'store'
+    const date = new Date().toISOString().slice(0, 10)
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${storeName}_expenses_${date}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const exportPDF = () => {
+    setPrinting(true)
+    const storeName = store?.name || 'My Store'
+    const date = new Date().toLocaleDateString()
+    const total = filteredExpenses.reduce((sum, e) => sum + e.amount, 0)
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600')
+    if (!printWindow) return
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Expense Report - ${storeName}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
+            .header { text-align: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 20px; }
+            .header h1 { margin: 0; font-size: 24px; }
+            .header p { margin: 4px 0; color: #666; }
+            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+            th { background: #f4f4f5; text-align: left; padding: 8px; border: 1px solid #d1d5db; font-size: 13px; }
+            td { padding: 8px; border: 1px solid #d1d5db; font-size: 13px; }
+            .total-row { font-weight: bold; background: #f9fafb; }
+            .footer { margin-top: 20px; font-size: 12px; color: #666; text-align: center; }
+            @media print { button { display: none; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>${storeName}</h1>
+            <p>Expense Report</p>
+            <p>Date: ${date}</p>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Category</th>
+                <th>Description</th>
+                <th>Amount</th>
+                <th>Payment Method</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredExpenses
+                .map(
+                  (e) => `
+                  <tr>
+                    <td>${e.date}</td>
+                    <td>${e.category}</td>
+                    <td>${e.description}</td>
+                    <td>${formatCurrency(e.amount)}</td>
+                    <td>${e.method.replace('_', ' ')}</td>
+                    <td>${e.reference || '-'}</td>
+                  </tr>
+                `
+                )
+                .join('')}
+              <tr class="total-row">
+                <td colspan="3">Total Expenditure</td>
+                <td>${formatCurrency(total)}</td>
+                <td colspan="2"></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">Generated by VyapariAI - ${storeName}</div>
+          <script>window.print(); setTimeout(() => window.close(), 500);</script>
+        </body>
+      </html>
+    `)
+    printWindow.document.close()
+    setPrinting(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -22,10 +148,28 @@ export function Expenses() {
           <h1 className="text-2xl font-bold text-gray-900">Expenses</h1>
           <p className="text-gray-600 mt-1">Track business expenses</p>
         </div>
-        <NavLink to="/expenses/new" className="btn-primary">
-          <Plus className="h-4 w-4" />
-          Add Expense
-        </NavLink>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exportCSV}
+            className="btn-secondary text-sm flex items-center gap-2"
+            disabled={printing}
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
+          <button
+            onClick={exportPDF}
+            className="btn-secondary text-sm flex items-center gap-2"
+            disabled={printing}
+          >
+            <Printer className="h-4 w-4" />
+            Print
+          </button>
+          <NavLink to="/expenses/new" className="btn-primary">
+            <Plus className="h-4 w-4" />
+            Add Expense
+          </NavLink>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -60,7 +204,7 @@ export function Expenses() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-600">Expense Count</p>
-                <p className="text-2xl font-bold text-gray-900">{expenses.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{filteredExpenses.length}</p>
               </div>
               <div className="h-12 w-12 rounded-lg bg-green-100 flex items-center justify-center">
                 <Receipt className="h-6 w-6 text-green-600" />
@@ -109,7 +253,7 @@ export function Expenses() {
               </tr>
             </thead>
             <tbody>
-              {expenses.map((expense) => (
+              {filteredExpenses.map((expense) => (
                 <tr key={expense.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="p-4 text-sm text-gray-600">{expense.date}</td>
                   <td className="p-4">

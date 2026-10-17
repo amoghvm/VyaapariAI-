@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
+import { CreateBranchModal } from '@/features/stores/CreateBranchModal'
 import {
   Menu,
   X,
@@ -142,6 +143,7 @@ export function Layout() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [showBranchModal, setShowBranchModal] = useState(false)
   const [actionCount, setActionCount] = useState(0)
 
   useEffect(() => {
@@ -184,7 +186,7 @@ export function Layout() {
   }))
 
   const handleAddBusiness = () => navigate('/onboarding')
-  const handleAddStore = () => navigate('/onboarding')
+  const handleAddStore = () => setShowBranchModal(true)
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -379,6 +381,10 @@ export function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {showBranchModal && (
+        <CreateBranchModal open={showBranchModal} onClose={() => setShowBranchModal(false)} />
+      )}
     </div>
   )
 }
