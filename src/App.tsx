@@ -3,6 +3,7 @@ import { AuthProvider, useAuth } from './features/auth/AuthContext'
 import { Layout } from './app/Layout'
 import { SignIn } from './features/auth/SignIn'
 import { SignUp } from './features/auth/SignUp'
+import { ProfileSetup } from './features/auth/ProfileSetup'
 import { Onboarding } from './features/onboarding/Onboarding'
 import { Dashboard } from './features/dashboard/Dashboard'
 import { Assistant } from './features/assistant/Assistant'
@@ -26,11 +27,12 @@ function LoadingScreen() {
 }
 
 function ProtectedLayout() {
-  const { user, business, loading } = useAuth()
+  const { user, business, store, profileIncomplete, loading } = useAuth()
 
   if (loading) return <LoadingScreen />
   if (!user) return <Navigate to="/signin" replace />
-  if (!business) return <Onboarding />
+  if (profileIncomplete) return <Navigate to="/onboarding/profile" replace />
+  if (!business || !store) return <Navigate to="/onboarding" replace />
 
   return <Layout />
 }
@@ -41,6 +43,8 @@ export function App() {
       <Routes>
         <Route path="/signin" element={<SignIn />} />
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/onboarding/profile" element={<ProfileSetup />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />

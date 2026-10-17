@@ -1,7 +1,28 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/AuthContext'
-import { Menu, X, ChevronDown, Store, User, LogOut, Bell, Settings, Home, Bot, ShoppingCart, Package, Users, CreditCard, TrendingUp, FileText, AlertTriangle, Cog } from 'lucide-react'
+import {
+  Menu,
+  X,
+  ChevronDown,
+  Store,
+  User,
+  LogOut,
+  Bell,
+  Settings,
+  Home,
+  Bot,
+  ShoppingCart,
+  Package,
+  Users,
+  CreditCard,
+  TrendingUp,
+  FileText,
+  AlertTriangle,
+  Cog,
+  Plus,
+  Building2,
+} from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navigation = [
@@ -19,8 +40,104 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Cog },
 ]
 
+const ROLE_BADGE: Record<string, string> = {
+  owner: 'badge-info',
+  admin: 'badge-info',
+  manager: 'badge-success',
+  staff: 'badge-warning',
+  viewer: 'badge-info',
+}
+
+function RoleBadge({ role }: { role: string }) {
+  return (
+    <span className={`badge ${ROLE_BADGE[role] || 'badge-info'}`}>
+      {role.charAt(0).toUpperCase() + role.slice(1)}
+    </span>
+  )
+}
+
+function SwitcherButton({
+  value,
+  icon: Icon,
+  items,
+  onItemSelect,
+  onAdd,
+  addLabel,
+  emptyState,
+}: {
+  label: string
+  value: string | null
+  icon: React.ComponentType<{ className?: string }>
+  items: Array<{ id: string; name: string; role?: string }>
+  onItemSelect: (id: string) => void
+  onAdd: () => void
+  addLabel: string
+  emptyState: string
+}) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <div className="relative w-full">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white text-left text-sm font-medium text-gray-700 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 transition-colors"
+      >
+        <Icon className="h-4 w-4 text-gray-500 shrink-0" />
+        <span className="truncate">{value || emptyState}</span>
+        <ChevronDown className={`h-4 w-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 w-full max-h-60 rounded-lg border border-gray-200 bg-white shadow-lg overflow-y-auto py-1 animate-in fade-in slide-in-from-top-2 z-50">
+          {items.length > 0 ? (
+            items.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => {
+                  onItemSelect(item.id)
+                  setOpen(false)
+                }}
+                className="flex w-full items-center gap-3 px-3 py-2 text-sm transition-colors hover:bg-primary-50 focus-visible:ring-2 focus-visible:ring-primary-500"
+              >
+                <span className="flex-1 truncate">{item.name}</span>
+                {item.role && <RoleBadge role={item.role} />}
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-500">{emptyState}</div>
+          )}
+          <div className="border-t border-gray-200" />
+          <button
+            onClick={(e) => {
+              e.preventDefault()
+              onAdd()
+              setOpen(false)
+            }}
+            className="flex w-full items-center gap-3 px-3 py-2 text-sm text-primary-600 font-medium transition-colors hover:bg-gray-50"
+          >
+            <Plus className="h-4 w-4" />
+            {addLabel}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function Layout() {
-  const { user, business, store, signOut, loading: authLoading } = useAuth()
+  const {
+    user,
+    business,
+    store,
+    businesses,
+    stores,
+    businessMemberships,
+    storeMemberships,
+    signOut,
+    loading: authLoading,
+    switchBusiness,
+    switchStore,
+  } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -33,7 +150,6 @@ export function Layout() {
 
   useEffect(() => {
     if (store) {
-      // TODO: Fetch action count from API
       setActionCount(0)
     }
   }, [store])
@@ -49,6 +165,26 @@ export function Layout() {
   if (!user || !business || !store) {
     return <Outlet />
   }
+
+  const businessRoleById = new Map<string, string>()
+  businessMemberships.forEach((m) => businessRoleById.set(m.business_id, m.role))
+  const storeRoleById = new Map<string, string>()
+  storeMemberships.forEach((m) => storeRoleById.set(m.store_id, m.role))
+
+  const businessItems = businesses.map((b) => ({
+    id: b.id,
+    name: b.name,
+    role: businessRoleById.get(b.id),
+  }))
+
+  const storeItems = stores.map((s) => ({
+    id: s.id,
+    name: s.name,
+    role: storeRoleById.get(s.id),
+  }))
+
+  const handleAddBusiness = () => navigate('/onboarding')
+  const handleAddStore = () => navigate('/onboarding')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -87,16 +223,33 @@ export function Layout() {
             </button>
           </div>
 
-          {/* Business/Store info */}
-          <div className="p-4 border-b border-gray-200">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary-100 flex items-center justify-center">
-                <Store className="h-5 w-5 text-primary-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{business.name}</p>
-                <p className="text-xs text-gray-500 truncate">{store.name}</p>
-              </div>
+          {/* Active business / store switchers */}
+          <div className="p-4 space-y-3 border-b border-gray-200">
+            <div className="px-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Business</p>
+              <SwitcherButton
+                label="Business"
+                value={business.name}
+                icon={Building2}
+                items={businessItems}
+                onItemSelect={switchBusiness}
+                onAdd={handleAddBusiness}
+                addLabel="Add Business"
+                emptyState="No business"
+              />
+            </div>
+            <div className="px-2">
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Store</p>
+              <SwitcherButton
+                label="Store"
+                value={store.name}
+                icon={Store}
+                items={storeItems}
+                onItemSelect={switchStore}
+                onAdd={handleAddStore}
+                addLabel="Add Store"
+                emptyState="No store"
+              />
             </div>
           </div>
 
@@ -158,7 +311,6 @@ export function Layout() {
             <div className="flex-1 lg:flex-none" />
 
             <div className="flex items-center gap-2">
-              {/* Notifications */}
               <button
                 className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100"
                 aria-label={`Notifications${actionCount > 0 ? `, ${actionCount} unread` : ''}`}
@@ -171,7 +323,6 @@ export function Layout() {
                 )}
               </button>
 
-              {/* User menu */}
               <div className="relative">
                 <button
                   className="flex items-center gap-2 p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"

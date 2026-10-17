@@ -12,36 +12,65 @@ const steps = [
 ]
 
 export function Onboarding() {
-  const { business, createBusiness, createStore, loading } = useAuth()
+  const { business, createBusiness, createStore, loading: authLoading } = useAuth()
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(0)
+  const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null)
+
+  const dismissAlert = () => setAlert(null)
 
   const handleBusinessSubmit = async (data: { name: string; type: BusinessType; gst_number?: string; address?: string; phone?: string; email?: string }) => {
+    setAlert(null)
     const { business: newBusiness, error } = await createBusiness(data)
     if (error) {
-      alert(error.message)
+      setAlert({ message: error.message, type: 'error' })
       return
     }
     if (newBusiness) {
+      setAlert({ message: 'Business created successfully', type: 'success' })
       setCurrentStep(1)
     }
   }
 
   const handleStoreSubmit = async (data: { name: string; code: string; address?: string; phone?: string; email?: string }) => {
+    setAlert(null)
     if (!business) return
     const { store, error } = await createStore({ business_id: business.id, ...data })
     if (error) {
-      alert(error.message)
+      setAlert({ message: error.message, type: 'error' })
       return
     }
     if (store) {
+      setAlert({ message: 'Store created successfully', type: 'success' })
       navigate('/dashboard')
     }
+  }
+
+  const alertVariant = alert?.type === 'error'
+    ? 'bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm mb-4'
+    : 'bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-700 text-sm mb-4'
+
+  const alertIcon = alert?.type === 'error' ? <AlertTriangle className="h-5 w-5 flex-shrink-0" /> : <LayoutDashboard className="h-5 w-5 flex-shrink-0" />
+
+  if (authLoading) {
+    return (
+      <div className="max-w-2xl mx-auto py-10 text-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto mb-4" />
+        <p className="text-gray-600 text-sm">Setting up your account...</p>
+      </div>
+    )
   }
 
   if (business) {
     return (
       <div className="max-w-2xl mx-auto">
+        {alert && (
+          <div className={alertVariant}>
+            {alertIcon}
+            <span>{alert.message}</span>
+            <button onClick={dismissAlert} className="ml-auto text-gray-400 hover:text-gray-600">&times;</button>
+          </div>
+        )}
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold text-gray-900">Set up your first store</h1>
           <p className="text-gray-600 mt-2">Add a store to start managing your business</p>
@@ -53,6 +82,13 @@ export function Onboarding() {
 
   return (
     <div className="max-w-2xl mx-auto">
+      {alert && (
+        <div className={alertVariant}>
+          {alertIcon}
+          <span>{alert.message}</span>
+          <button onClick={dismissAlert} className="ml-auto text-gray-400 hover:text-gray-600">&times;</button>
+        </div>
+      )}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           {steps.map((step, index) => (
