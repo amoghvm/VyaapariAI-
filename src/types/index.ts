@@ -401,8 +401,16 @@ export type InteractionStatus =
 
 export interface UserContext {
   user: Profile | null
+  businesses: Business[]
+  businessMemberships: BusinessMembership[]
+  stores: Store[]
+  storeMemberships: StoreMembership[]
   business: Business | null
   store: Store | null
   membership: BusinessMembership | null
   storeMembership: StoreMembership | null
+  profileIncomplete: boolean
+  switchBusiness: (businessId: string) => Promise<{ error: Error | null }>
+  switchStore: (storeId: string) => Promise<{ error: Error | null }>
+  completeProfile: (data: { full_name: string; preferred_language: string }) => Promise<{ error: Error | null }>
 }

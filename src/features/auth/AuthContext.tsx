@@ -1,6 +1,10 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Profile, Business, Store, BusinessMembership, StoreMembership, UserContext } from '@/types'
+
+const ACTIVE_BUSINESS_ID_KEY = 'vyapari_active_business_id'
+const ACTIVE_STORE_ID_KEY = 'vyapari_active_store_id'
+const DEFAULT_LANGUAGE = 'en'
 
 interface AuthContextType extends UserContext {
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>
@@ -8,7 +12,6 @@ interface AuthContextType extends UserContext {
   signOut: () => Promise<void>
   loading: boolean
   refreshSession: () => Promise<void>
-  switchStore: (storeId: string) => Promise<{ error: Error | null }>
   createBusiness: (data: CreateBusinessData) => Promise<{ business: Business | null; error: Error | null }>
   createStore: (data: CreateStoreData) => Promise<{ store: Store | null; error: Error | null }>
 }
@@ -35,6 +38,10 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Profile | null>(null)
+  const [businesses, setBusinesses] = useState<Business[]>([])
+  const [businessMemberships, setBusinessMemberships] = useState<BusinessMembership[]>([])
+  const [stores, setStores] = useState<Store[]>([])
+  const [storeMemberships, setStoreMemberships] = useState<StoreMembership[]>([])
   const [business, setBusiness] = useState<Business | null>(null)
   const [store, setStore] = useState<Store | null>(null)
   const [membership, setMembership] = useState<BusinessMembership | null>(null)
@@ -62,18 +69,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
+  const getCachedId = useCallback((key: string) => {
+    if (typeof localStorage === 'undefined') return null
+    try {
+      return localStorage.getItem(key)
+    } catch {
+      return null
+    }
+  }, [])
+
+  const setCachedId = useCallback((key: string, value: string | null) => {
+    if (typeof localStorage === 'undefined') return
+    try {
+      if (value) {
+        localStorage.setItem(key, value)
+      } else {
+        localStorage.removeItem(key)
+      }
+    } catch {
+      // ignore
+    }
+  }, [])
+
   const loadUserData = async (userId: string) => {
     try {
-      const { data: profile } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .single()
 
-      if (profile) {
-        setUser(profile)
-        await loadBusinessData(profile.id)
+      if (error || !profile) {
+        const fallback: Profile = {
+          id: userId,
+          email: '',
+          full_name: null,
+          avatar_url: null,
+          preferred_language: DEFAULT_LANGUAGE,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+        setUser(fallback)
+        setLoading(false)
+        return
       }
+
+      setUser(profile)
+      await loadBusinessData(userId)
     } catch (error) {
       console.error('Failed to load user data:', error)
       setLoading(false)
@@ -82,30 +124,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loadBusinessData = async (userId: string) => {
     try {
-      const { data: memberships } = await supabase
+      const { data: memberships, error } = await supabase
         .from('business_memberships')
         .select('*, business:businesses(*)')
         .eq('user_id', userId)
         .eq('businesses.is_active', true)
 
-      if (memberships && memberships.length > 0) {
-        const primaryMembership = memberships[0]
-        setMembership(primaryMembership)
-        setBusiness(primaryMembership.business)
-
-        const { data: stores } = await supabase
-          .from('stores')
-          .select('*, store_memberships!inner(*)')
-          .eq('business_id', primaryMembership.business_id)
-          .eq('store_memberships.user_id', userId)
-          .eq('is_active', true)
-
-        if (stores && stores.length > 0) {
-          const primaryStore = stores[0]
-          setStore(primaryStore)
-          setStoreMembership(primaryStore.store_memberships[0])
-        }
+      if (error) {
+        console.error('Failed to load business memberships:', error)
+        setLoading(false)
+        return
       }
+
+      const membershipsList = (memberships || []) as Array<BusinessMembership & { business: Business }>
+      const businessesList = membershipsList.map((m) => m.business).filter(Boolean) as Business[]
+      setBusinesses(businessesList)
+      setBusinessMemberships(membershipsList as BusinessMembership[])
+
+      if (businessesList.length === 0) {
+        setLoading(false)
+        return
+      }
+
+      const cachedBusinessId = getCachedId(ACTIVE_BUSINESS_ID_KEY)
+      const activeBusiness = businessesList.find((b) => b.id === cachedBusinessId) || businessesList[0]
+      setBusiness(activeBusiness)
+      const activeMembership = membershipsList.find((m) => m.business_id === activeBusiness.id && m.user_id === userId)
+      setMembership(activeMembership || null)
+
+      setCachedId(ACTIVE_BUSINESS_ID_KEY, activeBusiness.id)
+
+      await loadStoresForBusiness(activeBusiness.id, userId)
     } catch (error) {
       console.error('Failed to load business data:', error)
     } finally {
@@ -113,12 +162,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  const loadStoresForBusiness = async (businessId: string, userId: string) => {
+    try {
+      const { data: storesData, error } = await supabase
+        .from('stores')
+        .select('*, store_memberships!inner(*)')
+        .eq('business_id', businessId)
+        .eq('store_memberships.user_id', userId)
+        .eq('is_active', true)
+
+      if (error) {
+        console.error('Failed to load stores:', error)
+        return
+      }
+
+      const storesList = (storesData || []) as Array<Store & { store_memberships: StoreMembership[] }>
+      setStores(storesList)
+      setStoreMemberships(storesList.flatMap((s) => s.store_memberships))
+
+      if (storesList.length === 0) {
+        setStore(null)
+        setStoreMembership(null)
+        setCachedId(ACTIVE_STORE_ID_KEY, null)
+        return
+      }
+
+      const cachedStoreId = getCachedId(ACTIVE_STORE_ID_KEY)
+      const activeStore = storesList.find((s) => s.id === cachedStoreId) || storesList[0]
+      setStore(activeStore)
+      setStoreMembership(activeStore.store_memberships[0] || null)
+      setCachedId(ACTIVE_STORE_ID_KEY, activeStore.id)
+    } catch (error) {
+      console.error('Failed to load stores:', error)
+    }
+  }
+
   const clearUserData = () => {
     setUser(null)
+    setBusinesses([])
+    setBusinessMemberships([])
+    setStores([])
+    setStoreMemberships([])
     setBusiness(null)
     setStore(null)
     setMembership(null)
     setStoreMembership(null)
+    setCachedId(ACTIVE_BUSINESS_ID_KEY, null)
+    setCachedId(ACTIVE_STORE_ID_KEY, null)
   }
 
   const signIn = async (email: string, password: string) => {
@@ -144,26 +234,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.user) {
       await loadUserData(session.user.id)
+    } else {
+      clearUserData()
+      setLoading(false)
     }
+  }
+
+  const switchBusiness = async (businessId: string) => {
+    if (!user) return { error: new Error('Not authenticated') }
+
+    const target = businesses.find((b) => b.id === businessId)
+    if (!target) {
+      return { error: new Error('Business not found or access denied') }
+    }
+
+    setBusiness(target)
+    const activeMembership = businessMemberships.find(
+      (m) => m.business_id === businessId && m.user_id === user.id
+    )
+    setMembership(activeMembership || null)
+    setCachedId(ACTIVE_BUSINESS_ID_KEY, businessId)
+
+    setStore(null)
+    setStoreMembership(null)
+    setCachedId(ACTIVE_STORE_ID_KEY, null)
+
+    await loadStoresForBusiness(businessId, user.id)
+    return { error: null }
   }
 
   const switchStore = async (storeId: string) => {
     if (!user) return { error: new Error('Not authenticated') }
 
-    const { data: storeData, error } = await supabase
-      .from('stores')
-      .select('*, store_memberships!inner(*)')
-      .eq('id', storeId)
-      .eq('store_memberships.user_id', user.id)
-      .eq('is_active', true)
-      .single()
-
-    if (error || !storeData) {
+    const target = stores.find((s) => s.id === storeId)
+    if (!target) {
       return { error: new Error('Store not found or access denied') }
     }
 
-    setStore(storeData)
-    setStoreMembership(storeData.store_memberships[0])
+    setStore(target)
+    setStoreMembership(storeMemberships.find((m) => m.store_id === storeId) || null)
+    setCachedId(ACTIVE_STORE_ID_KEY, storeId)
     return { error: null }
   }
 
@@ -205,20 +315,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { store: storeData, error: null }
   }
 
+  const completeProfile = async ({ full_name, preferred_language }: { full_name: string; preferred_language: string }) => {
+    if (!user) return { error: new Error('Not authenticated') }
+
+    const { error } = await supabase
+      .from('profiles')
+      .upsert({ id: user.id, full_name, preferred_language })
+
+    if (error) return { error: new Error(error.message) }
+
+    await refreshSession()
+    return { error: null }
+  }
+
+  const profileIncomplete = !user?.full_name
+
   return (
     <AuthContext.Provider
       value={{
         user,
+        businesses,
+        businessMemberships,
+        stores,
+        storeMemberships,
         business,
         store,
         membership,
         storeMembership,
         loading,
+        profileIncomplete,
         signIn,
         signUp,
         signOut,
         refreshSession,
+        switchBusiness,
         switchStore,
+        completeProfile,
         createBusiness,
         createStore,
       }}
