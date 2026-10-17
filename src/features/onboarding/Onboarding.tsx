@@ -3,7 +3,7 @@ import { LayoutDashboard, Building2, Store, Users, Package, CreditCard, Trending
 import { useAuth } from '@/features/auth/AuthContext'
 import { cn } from '@/lib/utils'
 import { Link, useNavigate } from 'react-router-dom'
-import type { BusinessType } from '@/types'
+import type { Business, BusinessType } from '@/types'
 
 const steps = [
   { id: 'business', name: 'Business Details', icon: Building2, href: '/onboarding/business' },
@@ -16,6 +16,10 @@ export function Onboarding() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(0)
   const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null)
+  const [newlyCreatedBusiness, setNewlyCreatedBusiness] = useState<Business | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  const activeBiz = business || newlyCreatedBusiness
 
   const dismissAlert = () => setAlert(null)
 
@@ -27,6 +31,7 @@ export function Onboarding() {
       return
     }
     if (newBusiness) {
+      setNewlyCreatedBusiness(newBusiness)
       setAlert({ message: 'Business created successfully', type: 'success' })
       setCurrentStep(1)
     }
@@ -34,8 +39,10 @@ export function Onboarding() {
 
   const handleStoreSubmit = async (data: { name: string; code: string; address?: string; phone?: string; email?: string }) => {
     setAlert(null)
-    if (!business) return
-    const { store, error } = await createStore({ business_id: business.id, ...data })
+    if (!activeBiz) return
+    setSubmitting(true)
+    const { store, error } = await createStore({ business_id: activeBiz.id, ...data })
+    setSubmitting(false)
     if (error) {
       setAlert({ message: error.message, type: 'error' })
       return
@@ -57,25 +64,6 @@ export function Onboarding() {
       <div className="max-w-2xl mx-auto py-10 text-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto mb-4" />
         <p className="text-gray-600 text-sm">Setting up your account...</p>
-      </div>
-    )
-  }
-
-  if (business) {
-    return (
-      <div className="max-w-2xl mx-auto">
-        {alert && (
-          <div className={alertVariant}>
-            {alertIcon}
-            <span>{alert.message}</span>
-            <button onClick={dismissAlert} className="ml-auto text-gray-400 hover:text-gray-600">&times;</button>
-          </div>
-        )}
-        <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Set up your first store</h1>
-          <p className="text-gray-600 mt-2">Add a store to start managing your business</p>
-        </div>
-        <StoreForm onSubmit={handleStoreSubmit} />
       </div>
     )
   }
@@ -119,8 +107,8 @@ export function Onboarding() {
       {currentStep === 0 && (
         <BusinessForm onSubmit={handleBusinessSubmit} />
       )}
-      {currentStep === 1 && business && (
-        <StoreForm onSubmit={handleStoreSubmit} />
+      {currentStep === 1 && activeBiz && (
+        <StoreForm onSubmit={handleStoreSubmit} submitting={submitting} />
       )}
     </div>
   )
@@ -228,7 +216,7 @@ function BusinessForm({ onSubmit }: { onSubmit: (data: any) => void }) {
   )
 }
 
-function StoreForm({ onSubmit }: { onSubmit: (data: any) => void }) {
+function StoreForm({ onSubmit, submitting }: { onSubmit: (data: any) => void; submitting: boolean }) {
   const [formData, setFormData] = useState({ name: '', code: '', address: '', phone: '', email: '' })
   const [loading, setLoading] = useState(false)
 
@@ -309,8 +297,8 @@ function StoreForm({ onSubmit }: { onSubmit: (data: any) => void }) {
         </div>
       </div>
 
-      <button type="submit" className="btn-primary w-full" disabled={loading}>
-        {loading ? 'Creating...' : 'Complete Setup'}
+      <button type="submit" className="btn-primary w-full" disabled={loading || submitting}>
+        {loading || submitting ? 'Creating...' : 'Complete Setup'}
       </button>
     </form>
   )
