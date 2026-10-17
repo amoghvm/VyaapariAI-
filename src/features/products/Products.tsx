@@ -1,6 +1,7 @@
 import { Package, Plus, Search, Filter, Tag, AlertTriangle, X } from 'lucide-react'
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useAuth } from '@/features/auth/AuthContext'
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
   if (!open) return null
@@ -26,18 +27,61 @@ function Modal({ open, onClose, title, children }: { open: boolean; onClose: () 
 }
 
 export function Products() {
+  const { business, store } = useAuth()
   const [search, setSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [openAdd, setOpenAdd] = useState(false)
   const [openEdit, setOpenEdit] = useState(false)
   const [editProduct, setEditProduct] = useState<any>(null)
+  const [formData, setFormData] = useState({
+    name: '',
+    sku: '',
+    category: 'Grains',
+    unit: 'kg',
+    salePrice: '',
+    purchasePrice: '',
+    stock: '',
+    reorderLevel: '',
+  })
 
-  const products = [
+  const [products, setProducts] = useState([
     { id: '1', name: 'Basmati Rice 1kg', sku: 'RICE-001', category: 'Grains', unit: 'kg', salePrice: 85, purchasePrice: 70, stock: 50, reorderLevel: 10, status: 'active' },
     { id: '2', name: 'Toor Dal 1kg', sku: 'DAL-001', category: 'Pulses', unit: 'kg', salePrice: 120, purchasePrice: 100, stock: 30, reorderLevel: 5, status: 'active' },
     { id: '3', name: 'Sunflower Oil 1L', sku: 'OIL-001', category: 'Oils', unit: 'litre', salePrice: 145, purchasePrice: 130, stock: 20, reorderLevel: 5, status: 'low' },
     { id: '4', name: 'Biscuits Packet', sku: 'BISC-001', category: 'Snacks', unit: 'packet', salePrice: 25, purchasePrice: 20, stock: 100, reorderLevel: 20, status: 'active' },
-  ]
+  ])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const newProduct = {
+      id: String(Date.now()),
+      name: formData.name,
+      sku: formData.sku,
+      category: formData.category,
+      unit: formData.unit,
+      salePrice: parseFloat(formData.salePrice) || 0,
+      purchasePrice: parseFloat(formData.purchasePrice) || 0,
+      stock: parseInt(formData.stock, 10) || 0,
+      reorderLevel: parseInt(formData.reorderLevel, 10) || 0,
+      status: 'active',
+      business_id: business?.id,
+      store_id: store?.id,
+    }
+
+    setProducts([...products, newProduct])
+    setFormData({
+      name: '',
+      sku: '',
+      category: 'Grains',
+      unit: 'kg',
+      salePrice: '',
+      purchasePrice: '',
+      stock: '',
+      reorderLevel: '',
+    })
+    setOpenAdd(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -147,19 +191,35 @@ export function Products() {
       </div>
 
       <Modal open={openAdd} onClose={() => setOpenAdd(false)} title="Add Product">
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="label">Name</label>
-              <input className="input" placeholder="Product name" />
+              <input
+                className="input"
+                placeholder="Product name"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                required
+              />
             </div>
             <div>
               <label className="label">SKU</label>
-              <input className="input" placeholder="SKU" />
+              <input
+                className="input"
+                placeholder="SKU"
+                value={formData.sku}
+                onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                required
+              />
             </div>
             <div>
               <label className="label">Category</label>
-              <select className="input">
+              <select
+                className="input"
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+              >
                 <option>Grains</option>
                 <option>Pulses</option>
                 <option>Oils</option>
@@ -169,7 +229,11 @@ export function Products() {
             </div>
             <div>
               <label className="label">Unit</label>
-              <select className="input">
+              <select
+                className="input"
+                value={formData.unit}
+                onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
+              >
                 <option>kg</option>
                 <option>piece</option>
                 <option>litre</option>
@@ -179,25 +243,58 @@ export function Products() {
             </div>
             <div>
               <label className="label">Sale Price</label>
-              <input type="number" className="input" placeholder="₹0.00" />
+              <input
+                type="number"
+                className="input"
+                placeholder="₹0.00"
+                value={formData.salePrice}
+                onChange={(e) => setFormData({ ...formData, salePrice: e.target.value })}
+                required
+              />
             </div>
             <div>
               <label className="label">Purchase Price</label>
-              <input type="number" className="input" placeholder="₹0.00" />
+              <input
+                type="number"
+                className="input"
+                placeholder="₹0.00"
+                value={formData.purchasePrice}
+                onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
+                required
+              />
             </div>
             <div>
               <label className="label">Initial Stock</label>
-              <input type="number" className="input" placeholder="0" />
+              <input
+                type="number"
+                className="input"
+                placeholder="0"
+                value={formData.stock}
+                onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                required
+              />
             </div>
             <div>
               <label className="label">Reorder Level</label>
-              <input type="number" className="input" placeholder="0" />
+              <input
+                type="number"
+                className="input"
+                placeholder="0"
+                value={formData.reorderLevel}
+                onChange={(e) => setFormData({ ...formData, reorderLevel: e.target.value })}
+                required
+              />
             </div>
           </div>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Product creation form — connect to Products module
+          <div className="p-6 border-t border-gray-100 flex justify-end gap-2">
+            <button onClick={() => setOpenAdd(false)} className="btn-secondary px-4">
+              Close
+            </button>
+            <button type="submit" className="btn-primary">
+              Save Product
+            </button>
           </div>
-        </div>
+        </form>
       </Modal>
 
       <Modal open={openEdit} onClose={() => setOpenEdit(false)} title="Edit Product">
