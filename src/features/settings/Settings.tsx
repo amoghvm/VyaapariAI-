@@ -1,4 +1,4 @@
-import { User, Store, Building2, Bell, Shield, Palette, Database, LogOut, Save, Loader2 } from 'lucide-react'
+import { User, Store, Building2, Bell, Shield, Palette, Database, LogOut, Save, Loader2, Download, Download as DownloadIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useAuth } from '@/features/auth/AuthContext'
 import { cn } from '@/lib/utils'
@@ -398,6 +398,101 @@ function AppearanceTab() {
 }
 
 function DataTab() {
+  const [business, setBusiness] = useState<{ name: string; type: string } | null>(null)
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  const dismissToast = () => setToast(null)
+
+  const exportCSV = () => {
+    const products = [
+      { name: 'Basmati Rice 1kg', sku: 'RICE-001', category: 'Grains', unit: 'kg', salePrice: 85, purchasePrice: 70, stock: 50 },
+      { name: 'Toor Dal 1kg', sku: 'DAL-001', category: 'Pulses', unit: 'kg', salePrice: 120, purchasePrice: 100, stock: 30 },
+      { name: 'Sunflower Oil 1L', sku: 'OIL-001', category: 'Oils', unit: 'litre', salePrice: 145, purchasePrice: 130, stock: 20 },
+      { name: 'Biscuits Packet', sku: 'BISC-001', category: 'Snacks', unit: 'packet', salePrice: 25, purchasePrice: 20, stock: 100 },
+    ]
+    const sales = [
+      { invoice: 'INV-001', date: '2024-01-15', customer: 'Walk-in Customer', total: 1250.00, status: 'paid', paymentStatus: 'paid' },
+      { invoice: 'INV-002', date: '2024-01-15', customer: 'Ramesh Kumar', total: 3500.00, status: 'confirmed', paymentStatus: 'partial' },
+      { invoice: 'INV-003', date: '2024-01-14', customer: 'Priya Sharma', total: 890.00, status: 'confirmed', paymentStatus: 'unpaid' },
+    ]
+    const customers = [
+      { name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@example.com', address: '123 Main St', creditLimit: 10000, outstanding: 3500 },
+      { name: 'Priya Sharma', phone: '9876543211', email: 'priya@example.com', address: '456 Oak Ave', creditLimit: 5000, outstanding: 890 },
+      { name: 'Amit Patel', phone: '9876543212', email: 'amit@example.com', address: '789 Pine Rd', creditLimit: 15000, outstanding: 0 },
+      { name: 'Sunita Devi', phone: '9876543213', email: '', address: '321 Elm St', creditLimit: 8000, outstanding: 12000 },
+    ]
+
+    const section = (title: string, headers: string[], rows: any[][]) => {
+      const lines = [title, headers.join(','), ...rows.map((r) => r.map((f) => `"${String(f).replace(/"/g, '""')}"`).join(','))]
+      return lines.join('\n')
+    }
+
+    const csvContent = [
+      section('PRODUCTS', ['Name', 'SKU', 'Category', 'Unit', 'Sale Price', 'Purchase Price', 'Stock'], products.map((p) => [p.name, p.sku, p.category, p.unit, p.salePrice, p.purchasePrice, p.stock])),
+      '',
+      section('SALES', ['Invoice', 'Date', 'Customer', 'Total', 'Status', 'Payment Status'], sales.map((s) => [s.invoice, s.date, s.customer, s.total, s.status, s.paymentStatus])),
+      '',
+      section('CUSTOMERS', ['Name', 'Phone', 'Email', 'Address', 'Credit Limit', 'Outstanding'], customers.map((c) => [c.name, c.phone, c.email, c.address, c.creditLimit, c.outstanding])),
+    ].join('\n')
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const storeName = (business?.name || 'vyapari').replace(/\s+/g, '_')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${storeName}_data_export_${new Date().toISOString().slice(0, 10)}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    setToast({ message: 'CSV export downloaded', type: 'success' })
+    setTimeout(dismissToast, 2000)
+  }
+
+  const createBackup = () => {
+    const snapshot = {
+      exportedAt: new Date().toISOString(),
+      business,
+      version: '0.1.0',
+      data: {
+        products: [
+          { name: 'Basmati Rice 1kg', sku: 'RICE-001', category: 'Grains', unit: 'kg', salePrice: 85, purchasePrice: 70, stock: 50 },
+          { name: 'Toor Dal 1kg', sku: 'DAL-001', category: 'Pulses', unit: 'kg', salePrice: 120, purchasePrice: 100, stock: 30 },
+          { name: 'Sunflower Oil 1L', sku: 'OIL-001', category: 'Oils', unit: 'litre', salePrice: 145, purchasePrice: 130, stock: 20 },
+          { name: 'Biscuits Packet', sku: 'BISC-001', category: 'Snacks', unit: 'packet', salePrice: 25, purchasePrice: 20, stock: 100 },
+        ],
+        sales: [
+          { invoice: 'INV-001', date: '2024-01-15', customer: 'Walk-in Customer', total: 1250.00, status: 'paid', paymentStatus: 'paid' },
+          { invoice: 'INV-002', date: '2024-01-15', customer: 'Ramesh Kumar', total: 3500.00, status: 'confirmed', paymentStatus: 'partial' },
+          { invoice: 'INV-003', date: '2024-01-14', customer: 'Priya Sharma', total: 890.00, status: 'confirmed', paymentStatus: 'unpaid' },
+        ],
+        customers: [
+          { name: 'Ramesh Kumar', phone: '9876543210', email: 'ramesh@example.com', address: '123 Main St', creditLimit: 10000, outstanding: 3500 },
+          { name: 'Priya Sharma', phone: '9876543211', email: 'priya@example.com', address: '456 Oak Ave', creditLimit: 5000, outstanding: 890 },
+          { name: 'Amit Patel', phone: '9876543212', email: 'amit@example.com', address: '789 Pine Rd', creditLimit: 15000, outstanding: 0 },
+          { name: 'Sunita Devi', phone: '9876543213', email: '', address: '321 Elm St', creditLimit: 8000, outstanding: 12000 },
+        ],
+      },
+    }
+
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const storeName = (business?.name || 'vyapari').replace(/\s+/g, '_')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `${storeName}_backup_${new Date().toISOString().slice(0, 10)}.json`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    setToast({ message: 'Backup JSON downloaded', type: 'success' })
+    setTimeout(dismissToast, 2000)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -405,12 +500,29 @@ function DataTab() {
         <p className="text-gray-600 mt-1">Export or manage your business data</p>
       </div>
 
+      {toast && (
+        <div className={cn(
+          'p-4 rounded-lg flex items-center gap-2',
+          toast.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'
+        )}>
+          <DownloadIcon className="h-4 w-4" />
+          <span>{toast.message}</span>
+          <button onClick={dismissToast} className="ml-auto text-gray-400 hover:text-gray-600">×</button>
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="p-4 border border-gray-200 rounded-lg">
           <h4 className="font-medium text-gray-900">Export Data</h4>
-          <p className="text-sm text-gray-600 mt-1">Download your business data as CSV or Excel</p>
+          <p className="text-sm text-gray-600 mt-1">Download your business data as CSV</p>
           <div className="mt-4 flex gap-2">
-            <button className="btn-secondary text-sm">Export CSV</button>
+            <button
+              onClick={exportCSV}
+              className="btn-secondary text-sm flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </button>
             <button className="btn-secondary text-sm">Export Excel</button>
           </div>
         </div>
@@ -424,7 +536,15 @@ function DataTab() {
         <div className="p-4 border border-gray-200 rounded-lg">
           <h4 className="font-medium text-gray-900">Backup</h4>
           <p className="text-sm text-gray-600 mt-1">Create a complete backup of your data</p>
-          <button className="btn-secondary text-sm mt-4">Create Backup</button>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={createBackup}
+              className="btn-secondary text-sm flex items-center gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Create Backup
+            </button>
+          </div>
         </div>
 
         <div className="p-4 border border-gray-200 rounded-lg">

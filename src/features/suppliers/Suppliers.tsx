@@ -1,106 +1,78 @@
-import { Package, Plus, Search, Filter, Truck, CreditCard, AlertTriangle, Phone, Mail } from 'lucide-react'
+import { Truck, Plus, X } from 'lucide-react'
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+
+function Modal({ open, onClose, title, children, wide }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode; wide?: boolean }) {
+  if (!open) return null
+  return (
+    <>
+      <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label={title}>
+        <div className={`bg-white rounded-xl shadow-2xl w-full ${wide ? 'max-w-3xl' : 'max-w-lg'} border border-gray-200`}>
+          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            <button onClick={onClose} className="p-2 rounded-md text-gray-400 hover:bg-gray-100 hover:text-gray-600"><X className="h-5 w-5" /></button>
+          </div>
+          <div className="p-6">{children}</div>
+        </div>
+      </div>
+    </>
+  )
+}
 
 export function Suppliers() {
-  const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState('all')
+  const [openAdd, setOpenAdd] = useState(false)
+  const [openPurchase, setOpenPurchase] = useState(false)
+  const [form, setForm] = useState({ name: '', contact: '', phone: '', email: '', gst: '', terms: '' })
+  const [suppliers, setSuppliers] = useState([{ id: '1', name: 'ABC Suppliers', contact: 'John', phone: '9999', email: '', gst: '', terms: 'Net 30' }])
 
-  const suppliers = [
-    { id: '1', name: 'Metro Wholesale', contact: 'Rajesh Kumar', phone: '9876543210', email: 'rajesh@metro.com', address: 'Industrial Area', gst: '29ABCDE1234F1Z5', paymentTerms: 30, outstanding: 25000, status: 'active' },
-    { id: '2', name: 'Fresh Foods Ltd', contact: 'Anita Singh', phone: '9876543211', email: 'anita@freshfoods.com', address: 'Market Road', gst: '29BCDEF2345G2Z6', paymentTerms: 15, outstanding: 0, status: 'active' },
-    { id: '3', name: 'Global Traders', contact: 'Mohammed Ali', phone: '9876543212', email: '', address: 'Trade Center', gst: '29CDEFG3456H3Z7', paymentTerms: 45, outstanding: 15000, status: 'active' },
-  ]
+  const saveSupplier = () => {
+    setSuppliers([...suppliers, { id: String(Date.now()), name: form.name, contact: form.contact, phone: form.phone, email: form.email, gst: form.gst, terms: form.terms }])
+    setForm({ name: '', contact: '', phone: '', email: '', gst: '', terms: '' })
+    setOpenAdd(false)
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
-          <p className="text-gray-600 mt-1">Manage supplier relationships and purchases</p>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Suppliers</h1>
+        <div className="flex gap-2">
+          <button onClick={() => setOpenPurchase(true)} className="btn-secondary">New Purchase</button>
+          <button onClick={() => setOpenAdd(true)} className="btn-primary"><Plus className="h-4 w-4" /> Add Supplier</button>
         </div>
-        <NavLink to="/suppliers/new" className="btn-primary">
-          <Plus className="h-4 w-4" />
-          Add Supplier
-        </NavLink>
+      </div>
+      <div className="card">
+        <table className="w-full">
+          <thead><tr className="border-b"><th className="text-left p-4">Name</th><th className="text-left p-4">Contact</th><th className="text-left p-4">Phone</th><th className="text-left p-4">Terms</th></tr></thead>
+          <tbody>
+            {suppliers.map((s) => (<tr key={s.id} className="border-b"><td className="p-4">{s.name}</td><td className="p-4">{s.contact}</td><td className="p-4">{s.phone}</td><td className="p-4">{s.terms}</td></tr>))}
+          </tbody>
+        </table>
       </div>
 
-      <div className="card">
-        <div className="card-header">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="relative max-w-md w-full">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search suppliers..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="input pl-10"
-              />
-            </div>
-            <select value={filter} onChange={(e) => setFilter(e.target.value)} className="input w-auto">
-              <option value="all">All Suppliers</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </select>
+      <Modal open={openAdd} onClose={() => setOpenAdd(false)} title="Add Supplier">
+        <div className="space-y-4">
+          {(['name','contact','phone','email','gst','terms'] as const).map((f) => (
+            <div key={f}><label className="label">{f}</label><input className="input" value={(form as any)[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} /></div>
+          ))}
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setOpenAdd(false)} className="btn-secondary px-4">Cancel</button>
+            <button onClick={saveSupplier} className="btn-primary">Save</button>
           </div>
         </div>
+      </Modal>
 
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Supplier</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Contact</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">GST Number</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Payment Terms</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Outstanding</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Status</th>
-                <th className="text-left p-4 text-sm font-medium text-gray-600">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {suppliers.map((supplier) => (
-                <tr key={supplier.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="p-4">
-                    <div className="font-medium text-gray-900">{supplier.name}</div>
-                    <div className="text-sm text-gray-500">{supplier.address}</div>
-                  </td>
-                  <td className="p-4">
-                    <div className="text-sm text-gray-600">{supplier.contact}</div>
-                    <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                      <Phone className="h-4 w-4" /> {supplier.phone}
-                    </div>
-                    {supplier.email && (
-                      <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
-                        <Mail className="h-4 w-4" /> {supplier.email}
-                      </div>
-                    )}
-                  </td>
-                  <td className="p-4 text-sm text-gray-600">{supplier.gst}</td>
-                  <td className="p-4 text-sm text-gray-600">{supplier.paymentTerms} days</td>
-                  <td className="p-4">
-                    <span className={supplier.outstanding > 0 ? 'text-gray-900 font-medium' : 'text-green-600'}>
-                      {supplier.outstanding > 0 ? '₹' + supplier.outstanding.toLocaleString() : 'Clear'}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <span className={`badge ${supplier.status === 'active' ? 'badge-success' : 'badge-danger'}`}>
-                      {supplier.status}
-                    </span>
-                  </td>
-                  <td className="p-4">
-                    <div className="flex gap-2">
-                      <NavLink to={`/suppliers/${supplier.id}`} className="text-primary-600 hover:text-primary-500 text-sm font-medium">View</NavLink>
-                      <NavLink to={`/suppliers/${supplier.id}/purchase`} className="text-green-600 hover:text-green-500 text-sm font-medium">New Purchase</NavLink>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Modal open={openPurchase} onClose={() => setOpenPurchase(false)} title="New Purchase" wide>
+        <div className="space-y-4">
+          <div><label className="label">Supplier</label>
+            <select className="input">{suppliers.map((s) => <option key={s.id}>{s.name}</option>)}</select>
+          </div>
+          <div className="p-4 border rounded text-sm text-gray-500">Items, total, stock replenishment — connect to Purchases module</div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setOpenPurchase(false)} className="btn-secondary px-4">Cancel</button>
+            <button onClick={() => setOpenPurchase(false)} className="btn-primary">Save Purchase</button>
+          </div>
         </div>
-      </div>
+      </Modal>
     </div>
   )
 }

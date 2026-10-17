@@ -292,6 +292,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { business: null, error: new Error(error.message) }
 
+    setBusiness(businessData)
     await refreshSession()
     return { business: businessData, error: null }
   }
@@ -311,6 +312,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (error) return { store: null, error: new Error(error.message) }
 
+    setStore(storeData)
     await refreshSession()
     return { store: storeData, error: null }
   }

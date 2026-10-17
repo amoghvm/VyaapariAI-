@@ -12,9 +12,9 @@ const steps = [
 ]
 
 export function Onboarding() {
-  const { business, createBusiness, createStore, loading: authLoading } = useAuth()
+  const { business, createBusiness, createStore, loading: authLoading, refreshSession } = useAuth()
   const navigate = useNavigate()
-  const [currentStep, setCurrentStep] = useState(0)
+  const [currentStep, setCurrentStep] = useState(business ? 1 : 0)
   const [alert, setAlert] = useState<{ message: string; type: 'error' | 'success' } | null>(null)
   const [newlyCreatedBusiness, setNewlyCreatedBusiness] = useState<Business | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -49,6 +49,7 @@ export function Onboarding() {
     }
     if (store) {
       setAlert({ message: 'Store created successfully', type: 'success' })
+      await refreshSession()
       navigate('/dashboard')
     }
   }
