@@ -165,6 +165,7 @@ export function Dashboard() {
 
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (!productForm.name || !productForm.sku) return
     if (!business?.id || !store?.id) return
 
@@ -213,6 +214,7 @@ export function Dashboard() {
 
   const handleCustomerSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (!customerForm.name) return
     if (!business?.id) return
 
@@ -254,6 +256,7 @@ export function Dashboard() {
 
   const handleExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (!expenseForm.description || !expenseForm.amount) return
     if (!business?.id || !store?.id) return
 
@@ -293,8 +296,11 @@ export function Dashboard() {
     showToast('Expense recorded successfully')
   }
 
-  const handleSaleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSaleSubmit = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     if (!business?.id || !store?.id) return
     const lineItems = saleForm.items.filter(it => it.productName && it.quantity > 0)
     if (lineItems.length === 0) return
@@ -582,7 +588,7 @@ export function Dashboard() {
           </div>
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setOpenSale(false)} className="btn-secondary px-4">Cancel</button>
-            <button type="submit" className="btn-primary">Create Invoice</button>
+            <button type="button" onClick={handleSaleSubmit} className="btn-primary">Create Invoice</button>
           </div>
         </form>
       </Modal>

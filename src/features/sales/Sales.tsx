@@ -132,8 +132,11 @@ export function Sales() {
   }, [business?.id, store?.id])
 
   const total = items.reduce((s, it) => s + it.qty * it.price, 0)
-  const handleSaveSale = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSaveSale = async (e?: React.FormEvent) => {
+    if (e) {
+      e.preventDefault()
+      e.stopPropagation()
+    }
     if (items.length === 0 || items.some((it) => it.qty <= 0)) return
     setSubmitting(true)
     const calculatedTotal = items.reduce((s, it) => s + it.qty * it.price, 0)
@@ -340,8 +343,8 @@ export function Sales() {
             <span>Total</span><span>₹{total.toFixed(2)}</span>
           </div>
           <div className="flex justify-end gap-2">
-            <button onClick={() => setOpenNewSale(false)} className="btn-secondary px-4">Cancel</button>
-            <button type="submit" disabled={submitting} className="btn-primary">Save Sale</button>
+            <button type="button" onClick={() => setOpenNewSale(false)} className="btn-secondary px-4">Cancel</button>
+            <button type="button" onClick={handleSaveSale} disabled={submitting} className="btn-primary">Save Sale</button>
           </div>
         </form>
       </Modal>
