@@ -1,9 +1,9 @@
 import { LayoutDashboard, Building2, Store, Users, Package, CreditCard, TrendingUp, FileText, AlertTriangle, Bot, ShoppingCart, Settings, Plus, X } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { STORAGE_KEYS, saveStoredData } from '@/lib/storage'
+import { STORAGE_KEYS, getStoredData, saveStoredData } from '@/lib/storage'
 import { cn, formatCurrency } from '@/lib/utils'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface ProductFormData {
   name: string
@@ -75,6 +75,52 @@ export function Dashboard() {
     name: '', sku: '', category: 'Grains', unit: 'kg', salePrice: '', purchasePrice: '', stock: '', reorderLevel: '',
   })
   const [products, setProducts] = useState<Array<{ id: string; name: string; sku: string; category: string; unit: string; salePrice: number; purchasePrice: number; stock: number; reorderLevel: number; status: string; business_id?: string; store_id?: string }>>([])
+
+  // Inventory catalogue for sale line items
+  const [inventoryProducts, setInventoryProducts] = useState<any[]>([])
+
+  useEffect(() => {
+    async function loadInventoryItems() {
+      // 1. Attempt fetching live items directly from Supabase products/inventory
+      if (business?.id && store?.id) {
+        const { data, error } = await supabase
+          .from('products')
+          .select('id, name, sku, sale_price, stock')
+          .eq('business_id', business.id)
+          .eq('store_id', store.id)
+
+        if (!error && data && data.length > 0) {
+          setInventoryProducts(
+            data.map((p: any) => ({
+              id: p.id,
+              name: p.name,
+              price: Number(p.sale_price),
+              stock: Number(p.stock),
+            }))
+          )
+          return
+        }
+      }
+
+      // 2. Fallback to shared inventory/products storage
+      const stored = getStoredData(STORAGE_KEYS.PRODUCTS, [
+        { id: '1', name: 'Basmati Rice 1kg', salePrice: 85, stock: 50 },
+        { id: '2', name: 'Toor Dal 1kg', salePrice: 120, stock: 30 },
+        { id: '3', name: 'Sunflower Oil 1L', salePrice: 145, stock: 4 },
+        { id: '4', name: 'Biscuits Packet', salePrice: 25, stock: 100 },
+      ])
+      setInventoryProducts(
+        stored.map((p: any) => ({
+          id: p.id || p.sku,
+          name: p.name,
+          price: Number(p.salePrice || p.sale_price || 0),
+          stock: Number(p.stock || p.currentStock || 0),
+        }))
+      )
+    }
+
+    loadInventoryItems()
+  }, [business?.id, store?.id])
 
   // Customer form state
   const [customerForm, setCustomerForm] = useState<CustomerFormData>({
@@ -315,10 +361,10 @@ export function Dashboard() {
     const next = [...saleForm.items]
     next[i] = { ...next[i], [field]: val }
     if (field === 'productName') {
-      const p = products.find((x) => x.name === val)
+      const p = inventoryProducts.find((x) => x.name === val)
       if (p) {
-        next[i].price = p.salePrice
-        next[i].sku = p.sku
+        next[i].price = p.price
+        next[i].sku = p.id
       }
     }
     next[i].lineTotal = Number(next[i].quantity) * Number(next[i].price)
@@ -489,30 +535,44 @@ export function Dashboard() {
               <button type="button" onClick={addSaleItem} className="btn-secondary text-sm">+ Add Item</button>
             </div>
             {saleForm.items.map((it, i) => (
-              <div key={i} className="grid grid-cols-4 gap-2">
-                <select
-                  className="input"
-                  value={it.productName}
-                  onChange={(e) => updateSaleItem(i, 'productName', e.target.value)}
-                >
-                  <option value="">Select product...</option>
-                  {products.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
-                </select>
-                <input
-                  type="number"
-                  className="input"
-                  placeholder="Qty"
-                  value={it.quantity}
-                  onChange={(e) => updateSaleItem(i, 'quantity', parseInt(e.target.value) || 0)}
-                />
-                <input
-                  type="number"
-                  className="input"
-                  placeholder="Price"
-                  value={it.price}
-                  onChange={(e) => updateSaleItem(i, 'price', parseFloat(e.target.value) || 0)}
-                />
-                <button type="button" onClick={() => removeSaleItem(i)} className="btn-secondary text-sm">Remove</button>
+              <div key={i} className="grid grid-cols-12 gap-2 items-end">
+                <div className="col-span-5">
+                  <select
+                    className="input"
+                    value={it.productName}
+                    onChange={(e) => updateSaleItem(i, 'productName', e.target.value)}
+                  >
+                    <option value="">Select product...</option>
+                    {inventoryProducts.map((p) => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} — ₹{p.price} {p.stock > 0 ? `(Stock: ${p.stock})` : '(Out of stock)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="col-span-3">
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Qty"
+                    min="1"
+                    value={it.quantity}
+                    onChange={(e) => updateSaleItem(i, 'quantity', parseInt(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    className="input"
+                    placeholder="Price"
+                    step="0.01"
+                    value={it.price}
+                    onChange={(e) => updateSaleItem(i, 'price', parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <button type="button" onClick={() => removeSaleItem(i)} className="btn-secondary text-sm w-full">Remove</button>
+                </div>
               </div>
             ))}
           </div>
