@@ -1,21 +1,56 @@
-import { LayoutDashboard, Building2, Store, Users, Package, CreditCard, TrendingUp, FileText, AlertTriangle, Bot, ShoppingCart, Settings, Plus, PlusCircle, X } from 'lucide-react'
+import { LayoutDashboard, Building2, Store, Users, Package, CreditCard, TrendingUp, FileText, AlertTriangle, Bot, ShoppingCart, Settings, Plus, X } from 'lucide-react'
 import { useAuth } from '@/features/auth/AuthContext'
 import { cn, formatCurrency } from '@/lib/utils'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useState } from 'react'
+
+interface ProductFormData {
+  name: string
+  sku: string
+  category: string
+  unit: string
+  salePrice: string
+  purchasePrice: string
+  stock: string
+  reorderLevel: string
+}
+
+interface CustomerFormData {
+  name: string
+  phone: string
+  email: string
+  address: string
+  creditLimit: string
+}
+
+interface ExpenseFormData {
+  category: string
+  description: string
+  amount: string
+  method: string
+  reference: string
+}
+
+interface SaleItem {
+  productName: string
+  sku: string
+  quantity: number
+  unitPrice: number
+  lineTotal: number
+}
+
+interface SaleFormData {
+  customer: string
+  paymentMethod: string
+  paymentStatus: string
+  items: SaleItem[]
+}
 
 const stats = [
   { name: "Today's Sales", value: '₹0.00', icon: ShoppingCart, color: 'text-primary-600 bg-primary-100' },
   { name: 'Outstanding Credit', value: '₹0.00', icon: Users, color: 'text-yellow-600 bg-yellow-100' },
   { name: 'Low Stock Items', value: '0', icon: AlertTriangle, color: 'text-red-600 bg-red-100' },
   { name: 'Pending Actions', value: '0', icon: FileText, color: 'text-blue-600 bg-blue-100' },
-]
-
-const quickActions = [
-  { name: 'New Sale', icon: ShoppingCart },
-  { name: 'Add Product', icon: Package },
-  { name: 'Add Customer', icon: Users },
-  { name: 'Record Expense', icon: CreditCard },
 ]
 
 function Modal({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
@@ -48,6 +83,84 @@ export function Dashboard() {
   const [openProduct, setOpenProduct] = useState(false)
   const [openCustomer, setOpenCustomer] = useState(false)
   const [openExpense, setOpenExpense] = useState(false)
+
+  // Product form state
+  const [productForm, setProductForm] = useState<ProductFormData>({
+    name: '', sku: '', category: 'Grains', unit: 'kg', salePrice: '', purchasePrice: '', stock: '', reorderLevel: '',
+  })
+  const [products, setProducts] = useState<Array<{ id: string; name: string; sku: string; category: string; unit: string; salePrice: number; purchasePrice: number; stock: number; reorderLevel: number; status: string; business_id?: string; store_id?: string }>>([])
+
+  // Customer form state
+  const [customerForm, setCustomerForm] = useState<CustomerFormData>({
+    name: '', phone: '', email: '', address: '', creditLimit: '0',
+  })
+  const [customers, setCustomers] = useState<Array<{ id: string; name: string; phone: string; email: string; address: string; creditLimit: number; outstanding: number; status: string; business_id?: string }>>([])
+
+  // Expense form state
+  const [expenseForm, setExpenseForm] = useState<ExpenseFormData>({
+    category: 'Rent', description: '', amount: '', method: 'cash', reference: '',
+  })
+  const [expenses, setExpenses] = useState<Array<{ id: string; date: string; category: string; description: string; amount: number; method: string; reference: string; business_id?: string; store_id?: string }>>([])
+
+  const handleProductSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!productForm.name || !productForm.sku) return
+    const newProduct = {
+      id: String(Date.now()),
+      name: productForm.name,
+      sku: productForm.sku,
+      category: productForm.category,
+      unit: productForm.unit,
+      salePrice: parseFloat(productForm.salePrice) || 0,
+      purchasePrice: parseFloat(productForm.purchasePrice) || 0,
+      stock: parseInt(productForm.stock, 10) || 0,
+      reorderLevel: parseInt(productForm.reorderLevel, 10) || 0,
+      status: 'active',
+      business_id: business?.id,
+      store_id: store?.id,
+    }
+    setProducts([...products, newProduct])
+    setProductForm({ name: '', sku: '', category: 'Grains', unit: 'kg', salePrice: '', purchasePrice: '', stock: '', reorderLevel: '' })
+    setOpenProduct(false)
+  }
+
+  const handleCustomerSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!customerForm.name) return
+    const newCustomer = {
+      id: String(Date.now()),
+      name: customerForm.name,
+      phone: customerForm.phone,
+      email: customerForm.email,
+      address: customerForm.address,
+      creditLimit: parseFloat(customerForm.creditLimit) || 0,
+      outstanding: 0,
+      status: 'active',
+      business_id: business?.id,
+    }
+    setCustomers([...customers, newCustomer])
+    setCustomerForm({ name: '', phone: '', email: '', address: '', creditLimit: '0' })
+    setOpenCustomer(false)
+  }
+
+  const handleExpenseSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!expenseForm.description || !expenseForm.amount) return
+    const newExpense = {
+      id: String(Date.now()),
+      date: new Date().toISOString().slice(0, 10),
+      category: expenseForm.category,
+      description: expenseForm.description,
+      amount: parseFloat(expenseForm.amount) || 0,
+      method: expenseForm.method,
+      reference: expenseForm.reference,
+      business_id: business?.id,
+      store_id: store?.id,
+    }
+    setExpenses([...expenses, newExpense])
+    setExpenseForm({ category: 'Rent', description: '', amount: '', method: 'cash', reference: '' })
+    setOpenExpense(false)
+  }
 
   return (
     <div className="space-y-6">
@@ -163,37 +276,166 @@ export function Dashboard() {
         </div>
       </div>
 
+      {/* New Sale Modal */}
       <Modal open={openSale} onClose={() => setOpenSale(false)} title="New Sale">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Create a new invoice / POS sale.</p>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Sale creation form — connect to Sales module
+        <form className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Customer</label>
+              <input className="input" placeholder="Walk-in Customer" defaultValue="Walk-in Customer" />
+            </div>
+            <div>
+              <label className="label">Payment Method</label>
+              <select className="input">
+                <option>Cash</option>
+                <option>Card</option>
+                <option>UPI</option>
+                <option>Bank Transfer</option>
+              </select>
+            </div>
           </div>
-        </div>
+          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
+            Add line items from the Sales module
+          </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpenSale(false)} className="btn-secondary px-4">Cancel</button>
+            <button type="submit" className="btn-primary">Create Invoice</button>
+          </div>
+        </form>
       </Modal>
+
+      {/* Add Product Modal */}
       <Modal open={openProduct} onClose={() => setOpenProduct(false)} title="Add Product">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Add a new product to your catalogue.</p>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Product creation form — connect to Products module
+        <form onSubmit={handleProductSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Name</label>
+              <input className="input" placeholder="Product name" value={productForm.name} onChange={(e) => setProductForm({ ...productForm, name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">SKU</label>
+              <input className="input" placeholder="SKU" value={productForm.sku} onChange={(e) => setProductForm({ ...productForm, sku: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Category</label>
+              <select className="input" value={productForm.category} onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}>
+                <option>Grains</option>
+                <option>Pulses</option>
+                <option>Oils</option>
+                <option>Snacks</option>
+                <option>Dairy</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Unit</label>
+              <select className="input" value={productForm.unit} onChange={(e) => setProductForm({ ...productForm, unit: e.target.value })}>
+                <option>kg</option>
+                <option>litre</option>
+                <option>packet</option>
+                <option>piece</option>
+                <option>box</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Sale Price</label>
+              <input type="number" className="input" placeholder="₹0.00" value={productForm.salePrice} onChange={(e) => setProductForm({ ...productForm, salePrice: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Purchase Price</label>
+              <input type="number" className="input" placeholder="₹0.00" value={productForm.purchasePrice} onChange={(e) => setProductForm({ ...productForm, purchasePrice: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Initial Stock</label>
+              <input type="number" className="input" placeholder="0" value={productForm.stock} onChange={(e) => setProductForm({ ...productForm, stock: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Reorder Level</label>
+              <input type="number" className="input" placeholder="0" value={productForm.reorderLevel} onChange={(e) => setProductForm({ ...productForm, reorderLevel: e.target.value })} required />
+            </div>
           </div>
-        </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpenProduct(false)} className="btn-secondary px-4">Cancel</button>
+            <button type="submit" className="btn-primary">Add Product</button>
+          </div>
+        </form>
       </Modal>
+
+      {/* Add Customer Modal */}
       <Modal open={openCustomer} onClose={() => setOpenCustomer(false)} title="Add Customer">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Register a new customer.</p>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Customer creation form — connect to Customers module
+        <form onSubmit={handleCustomerSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Full Name</label>
+              <input className="input" placeholder="Customer name" value={customerForm.name} onChange={(e) => setCustomerForm({ ...customerForm, name: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Phone</label>
+              <input type="tel" className="input" placeholder="+91 98765 43210" value={customerForm.phone} onChange={(e) => setCustomerForm({ ...customerForm, phone: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Email</label>
+              <input type="email" className="input" placeholder="customer@example.com" value={customerForm.email} onChange={(e) => setCustomerForm({ ...customerForm, email: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Address</label>
+              <input className="input" placeholder="Customer address" value={customerForm.address} onChange={(e) => setCustomerForm({ ...customerForm, address: e.target.value })} />
+            </div>
+            <div>
+              <label className="label">Credit Limit</label>
+              <input type="number" className="input" placeholder="₹0.00" value={customerForm.creditLimit} onChange={(e) => setCustomerForm({ ...customerForm, creditLimit: e.target.value })} />
+            </div>
           </div>
-        </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpenCustomer(false)} className="btn-secondary px-4">Cancel</button>
+            <button type="submit" className="btn-primary">Save Customer</button>
+          </div>
+        </form>
       </Modal>
+
+      {/* Record Expense Modal */}
       <Modal open={openExpense} onClose={() => setOpenExpense(false)} title="Record Expense">
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600">Record a new business expense.</p>
-          <div className="p-4 border border-gray-200 rounded-lg text-center text-gray-500 text-sm">
-            Expense creation form — connect to Expenses module
+        <form onSubmit={handleExpenseSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="label">Category</label>
+              <select className="input" value={expenseForm.category} onChange={(e) => setExpenseForm({ ...expenseForm, category: e.target.value })}>
+                <option>Rent</option>
+                <option>Utilities</option>
+                <option>Transport</option>
+                <option>Marketing</option>
+                <option>Inventory</option>
+                <option>Salaries</option>
+                <option>Misc</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Description</label>
+              <input className="input" placeholder="Expense description" value={expenseForm.description} onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Amount</label>
+              <input type="number" className="input" placeholder="₹0.00" value={expenseForm.amount} onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })} required />
+            </div>
+            <div>
+              <label className="label">Payment Method</label>
+              <select className="input" value={expenseForm.method} onChange={(e) => setExpenseForm({ ...expenseForm, method: e.target.value })}>
+                <option>Cash</option>
+                <option>UPI</option>
+                <option>Card</option>
+                <option>Bank Transfer</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Reference / Bill No.</label>
+              <input className="input" placeholder="Bill number" value={expenseForm.reference} onChange={(e) => setExpenseForm({ ...expenseForm, reference: e.target.value })} />
+            </div>
           </div>
-        </div>
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setOpenExpense(false)} className="btn-secondary px-4">Cancel</button>
+            <button type="submit" className="btn-primary">Record Expense</button>
+          </div>
+        </form>
       </Modal>
     </div>
   )
